@@ -93,6 +93,19 @@
         background: rgba(12, 31, 24, 0.56);
         backdrop-filter: blur(5px);
       }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 5.5rem;
+        transform: translateX(-50%);
+        z-index: 80;
+        background: #0c1f18;
+        color: #f3f0e8;
+        border-radius: 999px;
+        padding: 0.55rem 0.95rem;
+        font-size: 0.78rem;
+        box-shadow: 0 8px 20px rgba(12, 31, 24, 0.28);
+      }
       .guide-badge {
         display: inline-flex;
         align-items: center;
@@ -135,6 +148,8 @@
       let detailBookId = null;
       let uiModal = { type: null, error: "", meta: {} };
       let pendingSecureAction = null;
+      let toastMessage = "";
+      let toastTimer = null;
       let loadError = null;
       let rtChannel = null;
       let debounceTimer = null;
@@ -160,6 +175,42 @@
       }
       function closeModal() {
         uiModal = { type: null, meta: {}, error: "" };
+      }
+      function showToast(msg) {
+        toastMessage = msg;
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toastMessage = "";
+          renderApp();
+        }, 2300);
+      }
+      function bookById(id) {
+        return cache.books.find((b) => b.id === id) || null;
+      }
+      function ensureBook(id) {
+        const hit = bookById(id);
+        if (hit) return hit;
+        const g = memberList()[0]?.id || "jeongeun";
+        const totalChapters = 4;
+        return {
+          id,
+          title: id,
+          author: "",
+          coverUrl: "",
+          guideId: g,
+          chapters: alignChaptersToTotal({}, totalChapters),
+          totalChapters,
+          finalSentence: { text: "", memberId: "", chapter: null },
+          finalAt: null,
+        };
+      }
+      function fileToDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("이미지 파일을 읽지 못했습니다."));
+          reader.readAsDataURL(file);
+        });
       }
       function bookIdSortIndex(id) {
         const m = /^b(\d+)$/i.exec(String(id || ""));
@@ -337,8 +388,8 @@
       }
 
       function renderHeader() {
-        const adminBadge = isAdminMode ? `<span class="rounded-full bg-deep px-2.5 py-1 text-[10px] font-semibold text-beige">멤버 관리</span>` : "";
-        return `<header class="sticky top-0 z-20 border-b border-deep/10 bg-beige/95 backdrop-blur"><div class="mx-auto flex max-w-content items-center justify-between px-4 py-4"><div><p class="text-[10px] uppercase tracking-[0.2em] text-deep/45">2026 Reading Club</p><h1 class="font-serif text-xl text-deep">Mary · Chad · Chloe</h1></div><div class="flex items-center gap-2"><span class="rounded-full bg-deep-soft px-2.5 py-1 text-[10px] font-semibold text-beige">${escapeHtml(currentMemberName)}</span>${adminBadge}<button id="btn-admin-mode" class="btn-ghost !px-3 !py-2 !text-xs">${isAdminMode ? "멤버 관리 종료" : "멤버 관리"}</button><button id="btn-logout" class="btn-ghost !px-3 !py-2 !text-xs">로그아웃</button></div></div></header>`;
+        const adminBadge = isAdminMode ? `<span class="rounded-full bg-deep px-2.5 py-1 text-[10px] font-semibold text-beige">관리자</span>` : "";
+        return `<header class="sticky top-0 z-20 border-b border-deep/10 bg-beige/95 backdrop-blur"><div class="mx-auto flex max-w-content items-center justify-between px-4 py-4"><div><p class="text-[10px] uppercase tracking-[0.2em] text-deep/45">2026 Reading Club</p><h1 class="font-serif text-xl text-deep">Mira · Chad · Chloe</h1></div><div class="flex items-center gap-2"><span class="rounded-full bg-deep-soft px-2.5 py-1 text-[10px] font-semibold text-beige">${escapeHtml(currentMemberName)}</span>${adminBadge}<button id="btn-admin-mode" class="btn-ghost !px-3 !py-2 !text-xs">책 정보 설정</button><button id="btn-logout" class="btn-ghost !px-3 !py-2 !text-xs">로그아웃</button></div></div></header>`;
       }
       function renderGuideEditForm(book) {
         const canEdit = isGuideFor(book) || isAdminMode;
@@ -352,7 +403,7 @@
         const rows = Array.from({ length: selected.totalChapters }, (_, i) => i + 1)
           .map((c) => `<section class="mt-3 rounded-xl border border-deep/10 bg-white/65 p-3"><div class="mb-2 flex items-center justify-between"><h4 class="font-semibold text-deep">Chapter ${c}</h4><span class="text-xs text-deep/45">${memberList().filter((m) => (selected.chapters[c]?.[m.id] || "").trim()).length}/${memberList().length} 작성</span></div><ul class="space-y-2">${memberList().map((m) => `<li class="rounded-lg border border-deep/10 bg-white/70 px-3 py-2"><p class="text-[11px] font-semibold text-deep/60">${escapeHtml(m.display_name)}</p><p class="mt-1 text-sm text-deep/85">${(selected.chapters[c]?.[m.id] || "").trim() ? escapeHtml(selected.chapters[c][m.id]) : `<span class="text-deep/35">아직 기록 없음</span>`}</p></li>`).join("")}</ul></section>`)
           .join("");
-        return `<main class="mx-auto max-w-content px-4 py-5 pb-28"><section class="paper-panel rounded-2xl border border-deep/10 p-4 shadow-sm"><div class="flex items-center justify-between gap-3"><div><p class="text-[11px] uppercase tracking-[0.18em] text-gold">현재의 읽기</p><h2 class="font-serif text-xl">${escapeHtml(selected.title)}</h2><p class="mt-1"><span class="guide-badge">⭐ 길잡이: ${escapeHtml(memberNameById(selected.guideId))}</span></p></div><span class="text-xs text-deep/50">${progress.done}/${progress.total} 완료</span></div><div class="mt-3 h-2 overflow-hidden rounded-full bg-mist"><div class="h-full rounded-full bg-deep-soft" style="width:${progress.pct}%"></div></div><form id="form-reading-input" class="mt-4 grid gap-2 sm:grid-cols-4"><select class="input-field sm:col-span-2" name="bookId">${cache.books.map((b) => `<option value="${b.id}" ${b.id === selected.id ? "selected" : ""}>${escapeHtml(b.title)}</option>`).join("")}</select><select class="input-field" name="chapter">${chapterOpts}</select><select class="input-field" name="member">${memberList().map((m) => `<option value="${m.id}">${escapeHtml(m.display_name)}</option>`).join("")}</select><textarea class="input-field sm:col-span-4" rows="3" name="sentence" placeholder="기억에 남는 문장을 입력하세요" required></textarea><button class="btn-primary sm:col-span-4">문장 기록</button></form></section>${renderGuideEditForm(selected)}<section class="mt-4">${rows}</section></main>`;
+        return `<main class="mx-auto max-w-content px-4 py-5 pb-28"><section class="paper-panel rounded-2xl border border-deep/10 p-4 shadow-sm"><div class="flex items-center justify-between gap-3"><div><p class="text-[11px] uppercase tracking-[0.18em] text-gold">현재의 읽기</p><h2 class="font-serif text-xl">${escapeHtml(selected.title)}</h2><p class="mt-1"><span class="guide-badge">⭐ 길잡이: ${escapeHtml(memberNameById(selected.guideId))}</span></p></div><span class="text-xs text-deep/50">${progress.done}/${progress.total} 완료</span></div><div class="mt-3 h-2 overflow-hidden rounded-full bg-mist"><div class="h-full rounded-full bg-deep-soft" style="width:${progress.pct}%"></div></div><form id="form-reading-input" class="mt-4 grid gap-2 sm:grid-cols-4"><select class="input-field sm:col-span-2" name="bookId">${cache.books.map((b) => `<option value="${b.id}" ${b.id === selected.id ? "selected" : ""}>${escapeHtml(b.title)}</option>`).join("")}</select><select class="input-field" name="chapter">${chapterOpts}</select><select class="input-field" name="member">${memberList().map((m) => `<option value="${m.id}">${escapeHtml(m.display_name)}</option>`).join("")}</select><textarea class="input-field sm:col-span-4" rows="3" name="sentence" placeholder="기억에 남는 문장을 입력하세요" required></textarea><button class="btn-primary sm:col-span-4">문장 기록</button></form></section><section class="mt-4">${rows}</section></main>`;
       }
       function renderBookshelfTab() {
         return `<main class="mx-auto max-w-content px-4 py-5 pb-28"><section class="wood-touch relative overflow-hidden rounded-2xl p-4"><div class="relative z-10"><h2 class="font-serif text-xl text-[#f4e6c2]">2026 북쉘프</h2><div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">${cache.books.map((b) => `<button type="button" class="group text-left" data-open-book="${b.id}"><div class="book-card">${b.coverUrl ? `<img src="${escapeHtml(b.coverUrl)}" alt="${escapeHtml(b.title)}" loading="lazy"/>` : `<div class="flex h-full items-center justify-center px-3 text-center text-sm font-semibold text-deep/40">${escapeHtml(b.title)}</div>`}</div><p class="mt-2 truncate text-sm font-semibold text-deep">${escapeHtml(b.title)}</p><p class="truncate text-xs text-deep/50">${escapeHtml(b.author || "저자 미입력")}</p><p class="mt-1"><span class="guide-badge">🚩 길잡이: ${escapeHtml(memberNameById(b.guideId))}</span></p></button>`).join("")}</div></div></section></main>`;
@@ -376,7 +427,7 @@
             return `<li class="rounded-md border border-deep/10 px-2 py-2"><span class="text-[11px] font-semibold text-deep/55">${escapeHtml(m.display_name)}</span><p class="text-sm text-deep/85">${txt ? escapeHtml(txt) : `<span class="text-deep/35">기록 없음</span>`}</p>${txt ? `<div class="mt-1.5 text-right"><button type="button" class="btn-ghost !px-2.5 !py-1 !text-[11px] ${canSelect ? "" : "opacity-40"}" data-select-final="1" data-book="${b.id}" data-member="${m.id}" data-chapter="${c}" ${canSelect ? "" : "disabled"}>최종 선택</button></div>` : ""}</li>`;
           }).join("")}</ul></section>`)
           .join("");
-        return `<div class="modal-bg fixed inset-0 z-40 flex items-end justify-center p-0 sm:items-center sm:p-5"><div class="paper-panel max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-deep/12 p-5 shadow-2xl sm:rounded-2xl"><div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="font-serif text-xl text-deep">${escapeHtml(b.title)}</h3><p class="text-sm text-deep/55">${escapeHtml(b.author || "저자 미입력")}</p><p class="mt-1"><span class="guide-badge">🚩 길잡이: ${escapeHtml(memberNameById(b.guideId))}</span></p></div><button class="btn-ghost !py-1.5 !text-xs" data-close-detail="1">닫기</button></div><p class="text-xs text-deep/60">${canSelect ? "최종 선택 전 길잡이 비밀번호를 재확인합니다." : "길잡이의 비밀번호가 일치하지 않습니다."}</p>${rows}</div></div>`;
+        return `<div class="modal-bg fixed inset-0 z-40 flex items-end justify-center p-0 sm:items-center sm:p-5"><div class="paper-panel max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-deep/12 p-5 shadow-2xl sm:rounded-2xl"><div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="font-serif text-xl text-deep">${escapeHtml(b.title)}</h3><p class="text-sm text-deep/55">${escapeHtml(b.author || "저자 미입력")}</p><p class="mt-1"><span class="guide-badge">🚩 이번 책의 길잡이: ${escapeHtml(memberNameById(b.guideId))}</span></p></div><button class="btn-ghost !py-1.5 !text-xs" data-close-detail="1">닫기</button></div><p class="text-xs text-deep/60">${canSelect ? "최종 선택 전 길잡이 비밀번호를 재확인합니다." : "길잡이의 비밀번호가 일치하지 않습니다."}</p>${rows}</div></div>`;
       }
       function renderBottomTabs() {
         const tab = (id, label) => `<button type="button" class="flex-1 py-3 text-center text-[12px] font-semibold ${currentTab === id ? "text-deep" : "text-deep/45"}" data-tab="${id}">${label}</button>`;
@@ -387,7 +438,14 @@
         if (uiModal.type === "master") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-2xl">BookVibe 2026</h2><form id="form-master-auth" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="마스터 비밀번호" required /><button class="btn-primary w-full">확인</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
         if (uiModal.type === "member-login") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-2xl">누구신가요?</h2><form id="form-member-login" class="mt-4 space-y-3"><select name="memberId" class="input-field">${memberList().map((m) => `<option value="${m.id}">${escapeHtml(m.display_name)}</option>`).join("")}</select><input type="password" name="password" class="input-field" placeholder="개인 비밀번호" required /><button class="btn-primary w-full">로그인</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
         if (uiModal.type === "first-login") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-xl">처음 오셨네요!</h2><p class="mt-2 text-sm text-deep/60">앞으로 사용할 비밀번호를 설정해주세요.</p><form id="form-first-password" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="새 비밀번호" required /><input type="password" name="confirmPassword" class="input-field" placeholder="새 비밀번호 확인" required /><button class="btn-primary w-full">저장</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
-        if (uiModal.type === "admin-auth") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-xl">멤버 관리 인증</h2><form id="form-admin-auth" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="관리자 비밀번호" required /><button class="btn-primary w-full">인증</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
+        if (uiModal.type === "admin-book-auth")
+          return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><div class="flex items-center justify-between"><h2 class="font-serif text-xl">책 정보 설정 인증</h2><button type="button" class="btn-ghost !px-2.5 !py-1 !text-xs" data-close-modal="1">닫기</button></div><form id="form-admin-book-auth" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder='관리자 비밀번호("dance")' required /><button class="btn-primary w-full">인증</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
+        if (uiModal.type === "book-settings") {
+          const selectedId = uiModal.meta.bookId || "";
+          const selectedBook = bookById(selectedId);
+          const selectOptions = cache.books.map((b) => `<option value="${b.id}" ${selectedId === b.id ? "selected" : ""}>${b.id} · ${escapeHtml(b.title)}</option>`).join("");
+          return `<div class="modal-bg fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-5"><div class="paper-panel max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-deep/12 p-5 shadow-2xl sm:rounded-2xl"><div class="sticky top-0 z-10 -mx-5 -mt-5 mb-4 flex items-center justify-between border-b border-deep/10 bg-[#f7f1e5]/95 px-5 py-3 backdrop-blur"><h2 class="font-serif text-xl">책 정보 설정(관리자)</h2><button type="button" class="btn-ghost !px-2.5 !py-1 !text-xs" data-close-modal="1">닫기</button></div><form id="form-book-settings" class="grid gap-3"><div><label class="text-xs text-deep/60">책 선택</label><select class="input-field mt-1" name="bookPick"><option value="">새 ID 사용</option>${selectOptions}</select></div><div><label class="text-xs text-deep/60">새 ID (예: b11, 선택 입력)</label><input class="input-field mt-1" name="bookId" value="${selectedBook ? "" : escapeHtml(selectedId)}" placeholder="b1" /></div><div><label class="text-xs text-deep/60">책 제목</label><input class="input-field mt-1" name="title" value="${escapeHtml(selectedBook?.title || "")}" required /></div><div><label class="text-xs text-deep/60">저자</label><input class="input-field mt-1" name="author" value="${escapeHtml(selectedBook?.author || "")}" /></div><div><label class="text-xs text-deep/60">총 챕터 수</label><input class="input-field mt-1" type="number" min="1" max="150" name="totalChapters" value="${selectedBook?.totalChapters || 4}" required /></div><div><label class="text-xs text-deep/60">길잡이 지정</label><select class="input-field mt-1" name="guideId">${memberList().map((m) => `<option value="${m.id}" ${selectedBook?.guideId === m.id ? "selected" : ""}>${escapeHtml(m.display_name)}</option>`).join("")}</select></div><div><label class="text-xs text-deep/60">표지 이미지 URL</label><input class="input-field mt-1" name="coverUrl" value="${escapeHtml(selectedBook?.coverUrl || "")}" placeholder="https://..." /></div><div><label class="text-xs text-deep/60">또는 파일 업로드</label><input class="input-field mt-1" type="file" name="coverFile" accept="image/*" /></div><button class="btn-primary mt-1">저장</button></form></div></div>`;
+        }
         if (uiModal.type === "secure-confirm") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-xl">본인 인증</h2><p class="mt-2 text-sm text-deep/60">${escapeHtml(uiModal.meta.message || "")}</p><form id="form-secure-confirm" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="개인 비밀번호" required /><button class="btn-primary w-full">확인</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
         return "";
       }
@@ -405,7 +463,8 @@
               ? renderSettingsTab()
               : renderReadingTab()
             : `<main class="min-h-screen"></main>`;
-        root.innerHTML = `${isGatePassed && currentMemberId ? renderHeader() : ""}${main}${isGatePassed && currentMemberId ? renderBottomTabs() : ""}${detailBookId && currentMemberId ? renderBookDetailModal(detailBookId) : ""}${renderAuthModal()}`;
+        const toast = toastMessage ? `<div class="toast">${escapeHtml(toastMessage)}</div>` : "";
+        root.innerHTML = `${isGatePassed && currentMemberId ? renderHeader() : ""}${main}${isGatePassed && currentMemberId ? renderBottomTabs() : ""}${detailBookId && currentMemberId ? renderBookDetailModal(detailBookId) : ""}${renderAuthModal()}${toast}`;
       }
 
       function askSecure(action, message) {
@@ -457,12 +516,12 @@
             return renderApp();
           }
           if (t.id === "btn-admin-mode") {
-            if (isAdminMode) {
-              isAdminMode = false;
-              sessionStorage.setItem("isAdminMode", "false");
-              return renderApp();
-            }
-            openModal("admin-auth");
+            openModal("admin-book-auth");
+            return renderApp();
+          }
+          const closeModalBtn = t.closest && t.closest("[data-close-modal]");
+          if (closeModalBtn) {
+            closeModal();
             return renderApp();
           }
           const openBook = t.closest && t.closest("[data-open-book]");
@@ -484,6 +543,15 @@
               "길잡이 본인 인증을 위해 비밀번호를 다시 입력하세요."
             );
             return renderApp();
+          }
+        });
+
+        document.addEventListener("change", (e) => {
+          const el = e.target;
+          if (el && el.name === "bookPick" && uiModal.type === "book-settings") {
+            const picked = (el.value || "").trim();
+            openModal("book-settings", { bookId: picked || "" });
+            renderApp();
           }
         });
 
@@ -542,15 +610,41 @@
               closeModal();
               return renderApp();
             }
-            if (form.id === "form-admin-auth") {
+            if (form.id === "form-admin-book-auth") {
               const pw = form.elements.namedItem("password").value;
               if (pw !== ADMIN_PASSWORD) {
-                openModal("admin-auth", {}, "관리자 비밀번호가 올바르지 않습니다.");
+                openModal("admin-book-auth", {}, "관리자 비밀번호가 올바르지 않습니다.");
                 return renderApp();
               }
               isAdminMode = true;
               sessionStorage.setItem("isAdminMode", "true");
-              closeModal();
+              openModal("book-settings", { bookId: currentBookId || "b1" });
+              return renderApp();
+            }
+            if (form.id === "form-book-settings") {
+              if (!isAdminMode) return;
+              const pick = (form.elements.namedItem("bookPick").value || "").trim();
+              const newId = (form.elements.namedItem("bookId").value || "").trim();
+              const targetId = (newId || pick || "").trim();
+              if (!/^b\d+$/i.test(targetId)) return alert("책 ID는 b1, b2 형식으로 입력해주세요.");
+              const book = ensureBook(targetId.toLowerCase());
+              book.title = (form.elements.namedItem("title").value || "").trim() || book.title;
+              book.author = (form.elements.namedItem("author").value || "").trim();
+              book.guideId = form.elements.namedItem("guideId").value;
+              const nextTotal = Math.max(1, parseInt(form.elements.namedItem("totalChapters").value, 10) || 1);
+              book.totalChapters = nextTotal;
+              book.chapters = alignChaptersToTotal(book.chapters, nextTotal);
+              const coverInput = (form.elements.namedItem("coverUrl").value || "").trim();
+              if (coverInput) book.coverUrl = coverInput;
+              const coverFileInput = form.elements.namedItem("coverFile");
+              if (coverFileInput && coverFileInput.files && coverFileInput.files[0]) {
+                book.coverUrl = await fileToDataUrl(coverFileInput.files[0]);
+              }
+              await persistBook(book);
+              await refreshFromDb();
+              currentBookId = book.id;
+              openModal("book-settings", { bookId: book.id });
+              showToast("책 정보가 성공적으로 업데이트되었습니다!");
               return renderApp();
             }
             if (form.id === "form-secure-confirm") {
