@@ -173,6 +173,17 @@
         memberList().forEach((m) => (o[m.id] = ""));
         return o;
       }
+      function alignChaptersToTotal(chapters, total) {
+        const normalized = { ...(chapters || {}) };
+        for (let c = 1; c <= total; c++) {
+          if (!normalized[c]) normalized[c] = emptyChapterRecord();
+        }
+        Object.keys(normalized).forEach((k) => {
+          const n = parseInt(k, 10);
+          if (Number.isFinite(n) && n > total) delete normalized[k];
+        });
+        return normalized;
+      }
       function normalizeMilestones(rawInput) {
         const raw = rawInput && typeof rawInput === "object" ? rawInput : {};
         const meta = raw._meta && typeof raw._meta === "object" ? raw._meta : {};
@@ -203,14 +214,15 @@
         const norm = normalizeMilestones(row.milestones);
         const rawGuide = row.guide_id || row.guide_name || norm.guideIdInMeta || "";
         const guideId = memberList().find((m) => m.id === rawGuide || m.display_name === rawGuide)?.id || memberList()[0]?.id || "jeongeun";
+        const totalChapters = Math.max(1, parseInt(row.total_chapters ?? norm.total, 10) || norm.total || 4);
         return {
           id: row.id || `b${index + 1}`,
           title: row.title || `2026 독서 ${index + 1}`,
           author: row.author || "",
           coverUrl: row.cover_url || "",
           guideId,
-          chapters: norm.chapters,
-          totalChapters: norm.total,
+          chapters: alignChaptersToTotal(norm.chapters, totalChapters),
+          totalChapters,
           finalSentence: normalizeFinalSentence(row.final_sentence),
           finalAt: row.final_at || null,
         };
@@ -228,6 +240,7 @@
           cover_url: book.coverUrl || null,
           guide_id: book.guideId,
           guide_name: memberNameById(book.guideId),
+          total_chapters: book.totalChapters,
           milestones: serializeMilestones(book),
           final_sentence: book.finalSentence,
           final_at: book.finalAt,
@@ -268,6 +281,7 @@
               cover_url: null,
               guide_id: g,
               guide_name: memberNameById(g),
+              total_chapters: 4,
               milestones: { _meta: { totalChapters: 4, guideId: g }, 1: emptyChapterRecord(), 2: emptyChapterRecord(), 3: emptyChapterRecord(), 4: emptyChapterRecord() },
               final_sentence: { text: "", memberId: "", chapter: null },
               final_at: null,
