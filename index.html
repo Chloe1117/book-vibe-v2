@@ -131,7 +131,7 @@
       const ADMIN_PASSWORD = "dance";
       const BOOK_TOTAL = 10;
       const DEFAULT_MEMBERS = [
-        { id: "jeongeun", display_name: "Mira", sort_order: 1, password: "", is_first_login: true },
+        { id: "jeongeun", display_name: "Mary", sort_order: 1, password: "", is_first_login: true },
         { id: "chad", display_name: "Chad", sort_order: 2, password: "", is_first_login: true },
         { id: "chloe", display_name: "Chloe", sort_order: 3, password: "", is_first_login: true },
       ];
@@ -389,7 +389,7 @@
 
       function renderHeader() {
         const adminBadge = isAdminMode ? `<span class="rounded-full bg-deep px-2.5 py-1 text-[10px] font-semibold text-beige">관리자</span>` : "";
-        return `<header class="sticky top-0 z-20 border-b border-deep/10 bg-beige/95 backdrop-blur"><div class="mx-auto flex max-w-content items-center justify-between px-4 py-4"><div><p class="text-[10px] uppercase tracking-[0.2em] text-deep/45">2026 Reading Club</p><h1 class="font-serif text-xl text-deep">Mira · Chad · Chloe</h1></div><div class="flex items-center gap-2"><span class="rounded-full bg-deep-soft px-2.5 py-1 text-[10px] font-semibold text-beige">${escapeHtml(currentMemberName)}</span>${adminBadge}<button id="btn-admin-mode" class="btn-ghost !px-3 !py-2 !text-xs">책 정보 설정</button><button id="btn-logout" class="btn-ghost !px-3 !py-2 !text-xs">로그아웃</button></div></div></header>`;
+        return `<header class="sticky top-0 z-20 border-b border-deep/10 bg-beige/95 backdrop-blur"><div class="mx-auto flex max-w-content items-center justify-between px-4 py-4"><div><p class="text-[10px] uppercase tracking-[0.2em] text-deep/45">Stair</p><h1 class="font-serif text-xl text-deep">2026 Book Club</h1></div><div class="flex items-center gap-2"><span class="rounded-full bg-deep-soft px-2.5 py-1 text-[10px] font-semibold text-beige">${escapeHtml(currentMemberName)}</span>${adminBadge}<button id="btn-admin-mode" class="btn-ghost !px-3 !py-2 !text-xs">책 정보 설정</button><button id="btn-logout" class="btn-ghost !px-3 !py-2 !text-xs">로그아웃</button></div></div></header>`;
       }
       function renderGuideEditForm(book) {
         const canEdit = isGuideFor(book) || isAdminMode;
