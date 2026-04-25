@@ -131,16 +131,16 @@
       const ADMIN_PASSWORD = "dance";
       const BOOK_TOTAL = 10;
       const DEFAULT_MEMBERS = [
-        { id: "jeongeun", display_name: "Mary", sort_order: 1, password: "", is_first_login: true },
-        { id: "chad", display_name: "Chad", sort_order: 2, password: "", is_first_login: true },
-        { id: "chloe", display_name: "Chloe", sort_order: 3, password: "", is_first_login: true },
+        { id: "mary", display_name: "Mary", sort_order: 3, password: "", is_first_login: true },
+        { id: "chad", display_name: "Chad", sort_order: 1, password: "", is_first_login: true },
+        { id: "chloe", display_name: "Chloe", sort_order: 2, password: "", is_first_login: true },
       ];
 
       const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       let cache = { books: [] };
       let members = [];
       let currentTab = "reading";
-      let currentBookId = "b1";
+      let currentBookId = "b3";
       let currentMemberId = sessionStorage.getItem("currentMemberId") || "";
       let currentMemberName = sessionStorage.getItem("currentMemberName") || "";
       let isGatePassed = sessionStorage.getItem("isGatePassed") === "true";
