@@ -176,7 +176,7 @@
     <div id="app-root"></div>
     
     <!-- Global Modal Structure - Shared Component -->
-    <div id="modal-overlay" class="hidden" style="position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center;">
+    <div id="modal-overlay" class="hidden" style="position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center;">
       <div class="modal-bg" style="position: absolute; inset: 0;"></div>
       <div id="modal-content" class="relative" style="pointer-events: auto;"></div>
     </div>
@@ -267,9 +267,26 @@
             document.body.style.overflow = 'hidden';
             
             // Inject modal content based on type
-            if (type === "edit-book" || type === "book-settings") {
+            if (type === "book-detail") {
+              const bookId = meta.bookId || "";
+              const book = cache.books.find((b) => b.id === bookId);
+              if (!book) {
+                modalContent.innerHTML = `<div class="paper-panel p-6">책을 찾을 수 없습니다.</div>`;
+              } else {
+                const canSelect = isGuideFor(book);
+                const rows = Array.from({ length: book.totalChapters }, (_, i) => i + 1)
+                  .map((c) => `<section class="mt-3 rounded-lg border border-deep/10 bg-white/70 p-3"><h4 class="font-semibold text-sm text-deep">Chapter ${c}</h4><ul class="mt-2 space-y-2">${memberList().map((m) => {
+                      const txt = (book.chapters[c]?.[m.id] || "").trim();
+                      return `<li class="rounded-md border border-deep/10 px-2 py-2"><span class="text-[11px] font-semibold text-deep/55">${escapeHtml(m.display_name)}</span><p class="text-sm text-deep/85">${txt ? escapeHtml(txt) : `<span class="text-deep/35">기록 없음</span>`}</p>${txt ? `<div class="mt-1.5 text-right"><button type="button" class="btn-ghost !px-2.5 !py-1 !text-[11px] ${canSelect ? "" : "opacity-40"}" data-select-final="1" data-book="${book.id}" data-member="${m.id}" data-chapter="${c}" ${canSelect ? "" : "disabled"}>최종 선택</button></div>` : ""}</li>`;
+                    }).join("")}</ul></section>`)
+                  .join("");
+                modalContent.innerHTML = `<div class="paper-panel max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-deep/12 p-5 shadow-2xl"><div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="font-serif text-xl text-deep">${escapeHtml(book.title)}</h3><p class="text-sm text-deep/55">${escapeHtml(book.author || "저자 미입력")}</p><p class="mt-1"><span class="guide-badge">🚩 이번 책의 길잡이: ${escapeHtml(memberNameById(book.guideId))}</span></p></div><button class="btn-ghost !py-1.5 !text-xs" data-close-modal="1">닫기</button></div><p class="text-xs text-deep/60">${canSelect ? "최종 선택 전 길잡이 비밀번호를 재확인합니다." : "길잡이의 비밀번호가 일치하지 않습니다."}</p>${rows}</div>`;
+              }
+            } else if (type === "edit-book" || type === "book-settings") {
               const selectedId = meta.bookId || "";
+              console.log("Edit modal opening for book ID:", selectedId);
               const selectedBook = bookById(selectedId);
+              console.log("Found book:", selectedBook);
               const selectOptions = cache.books.map((b) => `<option value="${b.id}" ${selectedId === b.id ? "selected" : ""}>${b.id} · ${escapeHtml(b.title)}</option>`).join("");
               modalContent.innerHTML = `<div class="paper-panel max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-deep/12 p-5 shadow-2xl sm:rounded-2xl"><div class="sticky top-0 z-10 -mx-5 -mt-5 mb-4 flex items-center justify-between border-b border-deep/10 bg-[#f7f1e5]/95 px-5 py-3 backdrop-blur"><h2 class="font-serif text-xl">책 정보 설정(관리자)</h2><button type="button" class="btn-ghost !px-2.5 !py-1 !text-xs" data-close-modal="1">닫기</button></div><form id="form-book-settings" class="grid gap-3"><div><label class="text-xs text-deep/60">책 선택</label><select class="input-field mt-1" name="bookPick"><option value="">새 ID 사용</option>${selectOptions}</select></div><div><label class="text-xs text-deep/60">새 ID (예: b11, 선택 입력)</label><input class="input-field mt-1" name="bookId" value="${selectedBook ? "" : escapeHtml(selectedId)}" placeholder="b1" /></div><div><label class="text-xs text-deep/60">책 제목</label><input class="input-field mt-1" name="title" value="${escapeHtml(selectedBook?.title || "")}" required /></div><div><label class="text-xs text-deep/60">저자</label><input class="input-field mt-1" name="author" value="${escapeHtml(selectedBook?.author || "")}" /></div><div><label class="text-xs text-deep/60">총 챕터 수</label><input class="input-field mt-1" type="number" min="1" max="150" name="totalChapters" value="${selectedBook?.totalChapters || 4}" required /></div><div><label class="text-xs text-deep/60">길잡이 지정</label><select class="input-field mt-1" name="guideId">${memberList().map((m) => `<option value="${m.id}" ${selectedBook?.guideId === m.id ? "selected" : ""}>${escapeHtml(m.display_name)}</option>`).join("")}</select></div><div><label class="text-xs text-deep/60">표지 이미지 URL</label><input class="input-field mt-1" name="coverUrl" value="${escapeHtml(selectedBook?.coverUrl || "")}" placeholder="https://..." /></div><button class="btn-primary w-full">저장</button></form></div>`;
             } else {
@@ -298,6 +315,10 @@
         // Re-enable scrolling
         document.body.style.overflow = 'auto';
       }
+      
+      // Attach functions to window object for global access
+      window.openModal = openModal;
+      window.closeModal = closeModal;
       function showToast(msg) {
         toastMessage = msg;
         if (toastTimer) clearTimeout(toastTimer);
@@ -924,7 +945,7 @@
                         </div>
                         <div class="flex flex-col gap-2">
                           <div class="flex gap-2">
-                            <button class="btn-ghost !px-3 !py-2 !text-xs" onclick="event.stopPropagation(); openModal('edit-book', '${book.id}')">수정</button>
+                            <button class="btn-ghost !px-3 !py-2 !text-xs" onclick="console.log('Edit button clicked for book:', '${book.id}'); event.stopPropagation(); window.openModal('edit-book', '${book.id}')">수정</button>
                             <button class="btn-ghost !px-3 !py-2 !text-xs text-red-600" onclick="confirmDeleteBook('${book.id}', '${escapeHtml(book.title)}')">삭제</button>
                           </div>
                           <button id="btn-set-book-month-${book.id}" 
@@ -1071,8 +1092,9 @@
 // ... (rest of the code remains the same)
           const openBook = t.closest && t.closest("[data-open-book]");
           if (openBook) {
-            detailBookId = openBook.getAttribute("data-open-book");
-            return renderApp();
+            const bookId = openBook.getAttribute("data-open-book");
+            openModal("book-detail", { bookId });
+            return;
           }
           const closeDetail = t.closest && t.closest("[data-close-detail]");
           if (closeDetail || (t.classList && t.classList.contains("modal-bg") && !uiModal.type)) {
@@ -1285,9 +1307,15 @@
       document.addEventListener("DOMContentLoaded", async () => {
         try {
           await loadMembers();
-          if (!isGatePassed) openModal("master");
-          else if (!currentMemberId) openModal("member-login");
-          if (isGatePassed && currentMemberId) {
+          
+          // Only open modals if user is not already logged in
+          if (!isGatePassed) {
+            openModal("master");
+          } else if (!currentMemberId) {
+            openModal("member-login");
+          } else {
+            // User is already logged in - ensure no modals are open
+            closeModal();
             await refreshFromDb();
             subscribeRealtime();
           }
@@ -1296,6 +1324,12 @@
           openModal("master");
         }
         bindEvents();
+        
+        // Safety check: ensure all modals are closed if user is logged in
+        if (isGatePassed && currentMemberId) {
+          closeModal();
+        }
+        
         // Ensure renderApp is only called after loadMembers and refreshFromDb are successfully completed
         renderApp();
       });
