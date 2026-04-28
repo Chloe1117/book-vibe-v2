@@ -163,12 +163,142 @@
         align-items: center;
         gap: 0.3rem;
         border-radius: 999px;
-        padding: 0.22rem 0.55rem;
-        font-size: 0.68rem;
-        font-weight: 700;
-        color: #0c1f18;
-        background: #e7d4a0;
+        padding: 0.2rem 0.6rem;
+        font-size: 0.75rem;
+        background: rgba(196, 163, 90, 0.12);
+        color: #c4a35a;
         border: 1px solid rgba(196, 163, 90, 0.5);
+      }
+      
+      /* Dynamic Chapter Cards - Premium Styling */
+      .chapter-cards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        padding: 1.5rem;
+        background: rgba(248, 250, 252, 0.5);
+        border-radius: 1rem;
+        border: 1px solid rgba(0, 0, 0, 0.03);
+      }
+      
+      .chapter-card {
+        padding: 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.03);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        transition: all 0.2s ease;
+        text-align: center;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      
+      .chapter-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+      
+      .chapter-card .chapter-label {
+        font-size: 0.75rem;
+        color: #666;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      .chapter-card .date-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #2C3E50;
+        line-height: 1.3;
+      }
+      
+      /* Color palette for date grouping */
+      .color-soft-blue { background: #E3F2FD; }
+      .color-pale-green { background: #F1F8E9; }
+      .color-light-peach { background: #FFF3E0; }
+      .color-lavender { background: #F3E5F5; }
+      .color-soft-coral { background: #FFEBEE; }
+      .color-mint-green { background: #E8F5E8; }
+      .color-sky-blue { background: #E1F5FE; }
+      .color-warm-yellow { background: #FFFDE7; }
+      
+      /* Main container padding */
+      .reading-tab-container {
+        padding: 24px;
+      }
+      
+      /* Section spacing */
+      .book-info-section {
+        margin-bottom: 40px;
+      }
+      
+      .schedule-section {
+        margin-bottom: 32px;
+      }
+      
+      /* Schedule Display - Premium Card Style */
+      .schedule-display {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #eee;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      }
+      
+      .schedule-section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #0c1f18;
+        margin-bottom: 1rem;
+        text-align: center;
+      }
+      
+      .schedule-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #0c1f18;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      
+      .schedule-dates {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 0.75rem;
+      }
+      
+      .schedule-date-item {
+        padding: 12px;
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        transition: all 0.2s ease;
+      }
+      
+      .schedule-date-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+      
+      .schedule-date-item .chapter-label {
+        font-size: 0.7rem;
+        color: #888;
+        margin-bottom: 0.25rem;
+        font-weight: 500;
+      }
+      
+      .schedule-date-item .date-value {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #2d5a3d;
+        line-height: 1.2;
       }
     </style>
   </head>
@@ -202,7 +332,11 @@
       let currentMemberId = sessionStorage.getItem("currentMemberId") || "";
       let currentMemberName = sessionStorage.getItem("currentMemberName") || "";
       let isGatePassed = sessionStorage.getItem("isGatePassed") === "true";
+      let isDebugMode = false; // Debug mode for super-pass functionality
       let isAdminMode = sessionStorage.getItem("isAdminMode") === "true";
+      
+      // Debug mode status logging
+      console.log("Current Debug Mode:", window.isDebugMode);
       let detailBookId = null;
       let uiModal = { type: null, error: "", meta: {} };
       let pendingSecureAction = null;
@@ -281,6 +415,36 @@
                     }).join("")}</ul></section>`)
                   .join("");
                 modalContent.innerHTML = `<div class="paper-panel max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-deep/12 p-5 shadow-2xl"><div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="font-serif text-xl text-deep">${escapeHtml(book.title)}</h3><p class="text-sm text-deep/55">${escapeHtml(book.author || "저자 미입력")}</p><p class="mt-1"><span class="guide-badge">🚩 이번 책의 길잡이: ${escapeHtml(memberNameById(book.guideId))}</span></p></div><button class="btn-ghost !py-1.5 !text-xs" data-close-modal="1">닫기</button></div><p class="text-xs text-deep/60">${canSelect ? "최종 선택 전 길잡이 비밀번호를 재확인합니다." : "길잡이의 비밀번호가 일치하지 않습니다."}</p>${rows}</div>`;
+              }
+            } else if (type === "schedule-settings") {
+              const selectedId = meta.bookId || "";
+              const selectedBook = bookById(selectedId);
+              if (!selectedBook) {
+                modalContent.innerHTML = `<div class="paper-panel p-6">책을 찾을 수 없습니다.</div>`;
+              } else {
+                // Generate schedule date inputs for each chapter
+                const scheduleInputs = Array.from({ length: selectedBook.totalChapters }, (_, i) => {
+                  const chapterNum = i + 1;
+                  const currentDate = selectedBook.schedules?.[chapterNum] || "";
+                  return `<div class="grid gap-1">
+                    <label class="text-xs text-deep/60">Chapter ${chapterNum}</label>
+                    <input type="date" name="schedule-${chapterNum}" value="${currentDate}" class="input-field text-sm" />
+                  </div>`;
+                }).join("");
+                
+                modalContent.innerHTML = `<div class="paper-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-deep/12 p-5 shadow-2xl">
+                  <div class="mb-4 flex items-center justify-between">
+                    <h2 class="font-serif text-xl text-deep">일정 설정 (관리자)</h2>
+                    <button class="btn-ghost !px-2.5 !py-1 !text-xs" data-close-modal="1">닫기</button>
+                  </div>
+                  <form id="form-schedule-settings" class="grid gap-4">
+                    <input type="hidden" name="bookId" value="${selectedId}" />
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      ${scheduleInputs}
+                    </div>
+                    <button class="btn-primary w-full">일정 저장</button>
+                  </form>
+                </div>`;
               }
             } else if (type === "edit-book" || type === "book-settings") {
               const selectedId = meta.bookId || "";
@@ -416,6 +580,7 @@
           final_sentence_chapter: row.final_sentence_chapter || null, // New DB column
           finalAt: row.final_at || null,
           is_book_of_the_month: !!row.is_book_of_the_month, // Include DB field
+          schedules: row.schedules || {}, // Include schedules field with default empty object
         };
       }
       function serializeMilestones(book) {
@@ -438,6 +603,7 @@
           final_sentence_chapter: book.final_sentence_chapter || null, // New DB column
           final_at: book.finalAt,
           is_book_of_the_month: !!book.is_book_of_the_month, // Include DB field
+          schedules: book.schedules || {}, // Include schedules field
           updated_at: new Date().toISOString(),
         };
       }
@@ -562,7 +728,8 @@
       }
 
       function renderHeader() {
-        return `<header class="sticky top-0 z-20 border-b border-deep/10 bg-beige/95 backdrop-blur"><div class="mx-auto flex max-w-content items-center justify-between px-4 py-4"><div><p class="text-[10px] uppercase tracking-[0.2em] text-deep/45">Stair</p><h1 class="font-serif text-xl text-deep">2026 Book Club</h1></div><div class="flex items-center gap-2"><span class="rounded-full bg-deep-soft px-2.5 py-1 text-[10px] font-semibold text-beige">${escapeHtml(currentMemberName)}</span><button id="btn-logout" class="btn-ghost !px-3 !py-2 !text-xs">로그아웃</button></div></div></header>`;
+        const debugIndicator = isDebugMode ? `<span class="text-xs text-orange-600 font-semibold" title="Debug Mode Active">🛠️ Debug</span>` : "";
+        return `<header class="sticky top-0 z-20 border-b border-deep/10 bg-beige/95 backdrop-blur"><div class="mx-auto flex max-w-content items-center justify-between px-4 py-4"><div><p class="text-[10px] uppercase tracking-[0.2em] text-deep/45">Stair</p><h1 class="font-serif text-xl text-deep">2026 Book Club</h1></div><div class="flex items-center gap-2">${debugIndicator}<span class="rounded-full bg-deep-soft px-2.5 py-1 text-[10px] font-semibold text-beige">${escapeHtml(currentMemberName)}</span><button id="btn-logout" class="btn-ghost !px-3 !py-2 !text-xs">로그아웃</button></div></div></header>`;
       }
       function renderGuideEditForm(book) {
         const isAdmin = currentMemberId === 'chloe';
@@ -572,25 +739,75 @@
       function renderReadingTab() {
         const selected = cache.books.find((b) => b.id === currentBookId) || cache.books[0];
         if (!selected) return `<main class="mx-auto max-w-content px-4 py-6 pb-28 text-sm text-deep/55">불러오는 중...</main>`;
-        const progress = chapterProgress(selected);
-        const chapterOpts = Array.from({ length: selected.totalChapters }, (_, i) => i + 1).map((n) => `<option value="${n}">Chapter ${n}</option>`).join("");
         
-        // Advanced progress bar with status-based coloring
-        const progressBarSegments = Array.from({ length: selected.totalChapters }, (_, i) => {
+        // Debug: Log schedules data
+        console.log("Selected book schedules:", selected.schedules);
+        
+        const progress = chapterProgress(selected);
+        const isAdmin = currentMemberId === 'chloe';
+        
+        // Intelligent chapter selection logic
+        const userSubmittedChapters = [];
+        for (let c = 1; c <= selected.totalChapters; c++) {
+          const userSentence = (selected.chapters[c]?.[currentMemberId] || "").trim();
+          if (userSentence) {
+            userSubmittedChapters.push(c);
+          }
+        }
+        
+        const highestSubmittedChapter = userSubmittedChapters.length > 0 ? Math.max(...userSubmittedChapters) : 0;
+        const defaultChapter = Math.min(highestSubmittedChapter + 1, selected.totalChapters);
+        
+        const chapterOpts = Array.from({ length: selected.totalChapters }, (_, i) => i + 1).map((n) => 
+          `<option value="${n}" ${n === defaultChapter ? 'selected' : ''}>Chapter ${n}</option>`
+        ).join("");
+        
+        // Dynamic Chapter Cards with color-coded date grouping
+        const colorPalette = [
+          'color-soft-blue',
+          'color-pale-green', 
+          'color-light-peach',
+          'color-lavender',
+          'color-soft-coral',
+          'color-mint-green',
+          'color-sky-blue',
+          'color-warm-yellow'
+        ];
+        
+        // Pre-calculate colors for each chapter based on date grouping
+        const chapterColors = [];
+        let currentColorIndex = 0;
+        let lastDate = '';
+        
+        for (let i = 0; i < selected.totalChapters; i++) {
           const chapterNum = i + 1;
-          const submittedCount = memberList().filter((m) => (selected.chapters[chapterNum]?.[m.id] || "").trim()).length;
-          let segmentClass = "w-2 h-2 rounded-full ";
+          const scheduleDate = selected.schedules?.[chapterNum] || '';
           
-          if (submittedCount === 0) {
-            segmentClass += "bg-gray-300"; // GREY: 0 submissions
-          } else if (submittedCount < memberList().length) {
-            segmentClass += "bg-yellow-400"; // YELLOW: 1-2 submissions (In Progress)
-          } else {
-            segmentClass += "bg-green-500"; // GREEN: All submissions (Completed)
+          if (scheduleDate && scheduleDate !== lastDate) {
+            // New date, move to next color
+            currentColorIndex = (currentColorIndex + 1) % colorPalette.length;
+            lastDate = scheduleDate;
           }
           
-          return `<div class="${segmentClass}" title="Chapter ${chapterNum}: ${submittedCount}/${memberList().length} 작성"></div>`;
-        }).join("");
+          chapterColors.push(scheduleDate ? colorPalette[currentColorIndex] : colorPalette[0]);
+        }
+        
+        const chapterCards = `
+          <div class="chapter-cards-grid">
+            ${Array.from({ length: selected.totalChapters }, (_, i) => {
+              const chapterNum = i + 1;
+              const scheduleDate = selected.schedules?.[chapterNum] || '';
+              const colorClass = chapterColors[i];
+              
+              return `
+                <div class="chapter-card ${colorClass}" data-chapter="${chapterNum}">
+                  <div class="chapter-label">Chapter ${chapterNum}</div>
+                  <div class="date-value">${scheduleDate || '미정'}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
         
         const rows = Array.from({ length: selected.totalChapters }, (_, i) => i + 1)
           .map((c) => {
@@ -627,7 +844,47 @@
             }).join("")}</ul></section>`;
           }).join("");
         
-        return `<main class="mx-auto max-w-content px-4 py-5 pb-28"><section class="paper-panel rounded-2xl border border-deep/10 p-4 shadow-sm"><div class="flex items-center justify-between gap-3"><div><p class="text-[11px] uppercase tracking-[0.18em] text-gold">이달의 책</p><h2 class="font-serif text-xl">${escapeHtml(selected.title)}</h2><p class="mt-1"><span class="guide-badge">⭐ 길잡이: ${escapeHtml(memberNameById(selected.guideId))}</span></p></div><span class="text-xs text-deep/50">${progress.done}/${progress.total} 완료</span></div><div class="mt-3 h-2 overflow-hidden rounded-full bg-mist"><div class="h-full rounded-full bg-deep-soft" style="width:${progress.pct}%"></div></div><div class="mt-3 flex gap-1 justify-center">${progressBarSegments}</div><div class="mt-4 p-3 bg-deep/5 rounded-lg border border-deep/10"><p class="text-sm text-deep/60 mb-1">기록 정보</p><p class="text-xs text-deep/80">${escapeHtml(currentMemberName)} | ${escapeHtml(selected.title)}</p></div><form id="form-reading-input" class="mt-4 grid gap-2"><select class="input-field" name="chapter">${chapterOpts}</select><textarea class="input-field" rows="3" name="sentence" placeholder="기억에 남는 문장을 입력하세요" required></textarea><button class="btn-primary">문장 기록</button></form></section><section class="mt-4">${rows}</section></main>`;
+        return `<main class="reading-tab-container mx-auto max-w-content pb-28">
+          <!-- Book Info Section -->
+          <div class="book-info-section">
+            <section class="paper-panel rounded-2xl border border-deep/10 p-4 shadow-sm">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-[11px] uppercase tracking-[0.18em] text-gold">이달의 책</p>
+                  <h2 class="font-serif text-xl">${escapeHtml(selected.title)}</h2>
+                  <p class="mt-1"><span class="guide-badge">⭐ 길잡이: ${escapeHtml(memberNameById(selected.guideId))}</span></p>
+                </div>
+                <span class="text-xs text-deep/50">${progress.done}/${progress.total} 완료</span>
+              </div>
+              <div class="mt-3 h-2 overflow-hidden rounded-full bg-mist">
+                <div class="h-full rounded-full bg-deep-soft" style="width:${progress.pct}%"></div>
+              </div>
+              <div class="mt-4 p-3 bg-deep/5 rounded-lg border border-deep/10">
+                <p class="text-sm text-deep/60 mb-1">기록 정보</p>
+                <p class="text-xs text-deep/80">${escapeHtml(currentMemberName)} | ${escapeHtml(selected.title)}</p>
+              </div>
+              <form id="form-reading-input" class="mt-4 grid gap-2">
+                <select class="input-field" name="chapter">${chapterOpts}</select>
+                <textarea class="input-field" rows="3" name="sentence" placeholder="기억에 남는 문장을 입력하세요" required></textarea>
+                <button class="btn-primary">문장 기록</button>
+              </form>
+            </section>
+          </div>
+          
+          <!-- Schedule Section -->
+          <div class="schedule-section">
+            <div class="schedule-display">
+              <div class="schedule-title">
+                <span>📅 챕터별 목표 일정</span>
+                ${isAdmin ? `<button class="btn-ghost !px-2 !py-1 !text-xs" onclick="event.stopPropagation(); window.openModal('schedule-settings', { bookId: '${selected.id}' })">일정 설정</button>` : ''}
+              </div>
+              ${chapterCards}
+            </div>
+          </div>
+          
+          <!-- Entries Section -->
+          <section>${rows}</section>
+        </main>`;
       }
       // Edit/Delete functions for sentences
       window.editSentence = function(chapter, memberId, currentSentence) {
@@ -1026,7 +1283,7 @@
       function renderAuthModal() {
         if (!uiModal.type) return "";
         if (uiModal.type === "master") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-2xl">BookVibe 2026</h2><form id="form-master-auth" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="마스터 비밀번호" required /><button class="btn-primary w-full">확인</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
-        if (uiModal.type === "member-login") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-2xl">누구신가요?</h2><form id="form-member-login" class="mt-4 space-y-3"><select name="memberId" class="input-field">${memberList().map((m) => `<option value="${m.id}">${escapeHtml(m.display_name)}</option>`).join("")}</select><input type="password" name="password" class="input-field" placeholder="개인 비밀번호" required /><button class="btn-primary w-full">로그인</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
+        if (uiModal.type === "member-login") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-2xl">누구신가요?</h2><form id="form-member-login" class="mt-4 space-y-3"><select name="memberId" class="input-field">${memberList().map((m) => `<option value="${m.id}">${escapeHtml(m.display_name)}</option>`).join("")}</select><input type="password" name="password" class="input-field" placeholder="개인 비밀번호" ${window.isDebugMode ? "" : "required"} /><button class="btn-primary w-full">로그인</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
         if (uiModal.type === "first-login") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-xl">처음 오셨네요!</h2><p class="mt-2 text-sm text-deep/60">앞으로 사용할 비밀번호를 설정해주세요.</p><form id="form-first-password" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="새 비밀번호" required /><input type="password" name="confirmPassword" class="input-field" placeholder="새 비밀번호 확인" required /><button class="btn-primary w-full">저장</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
         if (uiModal.type === "secure-confirm") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-xl">본인 인증</h2><p class="mt-2 text-sm text-deep/60">${escapeHtml(uiModal.meta.message || "")}</p><form id="form-secure-confirm" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="개인 비밀번호" required /><button class="btn-primary w-full">확인</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
         return "";
@@ -1164,6 +1421,18 @@
           try {
             if (form.id === "form-master-auth") {
               const pw = form.elements.namedItem("password").value;
+              
+              // Debug mode trigger
+              if (pw === "dance") {
+                window.isDebugMode = true;
+                alert('Debug Mode Active');
+                console.log("🛠️ Debug mode activated!");
+                isGatePassed = true;
+                sessionStorage.setItem("isGatePassed", "true");
+                openModal("member-login");
+                return renderApp();
+              }
+              
               if (pw !== USER_PASSWORD) {
                 openModal("master", {}, "마스터 비밀번호가 올바르지 않습니다.");
                 return renderApp();
@@ -1176,6 +1445,20 @@
             if (form.id === "form-member-login") {
               const memberId = form.elements.namedItem("memberId").value;
               const pw = form.elements.namedItem("password").value;
+              
+              // Debug bypass at the very beginning
+              if (window.isDebugMode && (pw === "" || pw === null)) {
+                console.log("Debug bypass triggered");
+                const mem = memberList().find((m) => m.id === memberId);
+                if (mem) {
+                  setMemberSession(mem);
+                  await refreshFromDb();
+                  subscribeRealtime();
+                  closeModal();
+                  return renderApp();
+                }
+              }
+              
               const mem = memberList().find((m) => m.id === memberId);
               if (!mem) {
                 openModal("member-login", {}, "멤버를 찾을 수 없습니다.");
@@ -1186,6 +1469,7 @@
                 openModal("first-login", { memberId: mem.id });
                 return renderApp();
               }
+              
               if ((mem.password || "") !== pw) {
                 openModal("member-login", {}, "개인 비밀번호가 일치하지 않습니다.");
                 return renderApp();
@@ -1229,6 +1513,52 @@
               subscribeRealtime();
               closeModal();
               return renderApp();
+            }
+            
+            if (form.id === "form-schedule-settings") {
+              // Check if user is admin
+              const isAdmin = currentMemberId === 'chloe';
+              if (!isAdmin) {
+                alert("관리자 기능에 접근할 수 없습니다.");
+                return renderApp();
+              }
+              
+              const bookId = form.elements.namedItem("bookId").value;
+              const book = cache.books.find((b) => b.id === bookId);
+              if (!book) return;
+              
+              // Collect schedule dates
+              const schedules = {};
+              for (let i = 1; i <= book.totalChapters; i++) {
+                const dateInput = form.elements.namedItem(`schedule-${i}`);
+                if (dateInput && dateInput.value) {
+                  schedules[i] = dateInput.value;
+                }
+              }
+              
+              // Update book with schedules
+              try {
+                const { data, error } = await sb
+                  .from('books')
+                  .update({ schedules })
+                  .eq('id', bookId)
+                  .select();
+                
+                if (error) {
+                  console.error("Schedule update error:", error);
+                  alert("일정 저장 실패: " + error.message);
+                  return;
+                }
+                
+                console.log("Schedules updated successfully:", data);
+                await refreshFromDb();
+                closeModal();
+                return renderApp();
+              } catch (updateError) {
+                console.error("Schedule update error:", updateError);
+                alert("일정 저장 오류: " + updateError.message);
+                return;
+              }
             }
                         
                         
