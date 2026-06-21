@@ -6,6 +6,8 @@
     <title>BookVibe 2026</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
     <script>
       tailwind.config = {
         theme: {
@@ -461,8 +463,10 @@
         // Load data and start the app
         loadMembers().then(() => {
           refreshFromDb().then(() => {
-            subscribeRealtime();
-            renderApp();
+            loadDailyReadings().then(() => {
+              subscribeRealtime();
+              renderApp();
+            });
           });
         });
       }
@@ -773,6 +777,585 @@
         };
         return codes[memberId] || memberId + '2026';
       }
+      
+      // Image compression and upload functions
+      async function compressImage(file) {
+        const options = {
+          maxSizeMB: 0.5,
+          maxWidthOrHeight: 1200,
+          useWebWorker: true,
+          quality: 0.8
+        };
+        
+        try {
+          const compressedFile = await imageCompression(file, options);
+          console.log('Compressed image size:', compressedFile.size / 1024 / 1024, 'MB');
+          return compressedFile;
+        } catch (error) {
+          console.error('Error compressing image:', error);
+          throw error;
+        }
+      }
+      
+      async function uploadImageToSupabase(file, fileName) {
+        try {
+          const { data, error } = await sb.storage
+            .from('meeting-photos')
+            .upload(fileName, file, {
+              cacheControl: '3600',
+              upsert: false
+            });
+          
+          if (error) throw error;
+          
+          // Get public URL
+          const { data: { publicUrl } } = sb.storage
+            .from('meeting-photos')
+            .getPublicUrl(fileName);
+          
+          return publicUrl;
+        } catch (error) {
+          console.error('Error uploading image:', error);
+          throw error;
+        }
+      }
+      
+      async function handleImageUpload(event, maxPhotos = 5) {
+        const files = Array.from(event.target.files);
+        if (files.length > maxPhotos) {
+          alert(`최대 ${maxPhotos}개의 사진만 업로드할 수 있습니다.`);
+          return [];
+        }
+        
+        const uploadedUrls = [];
+        
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (!file.type.startsWith('image/')) {
+            alert('이미지 파일만 업로드할 수 있습니다.');
+            continue;
+          }
+          
+          try {
+            const compressedFile = await compressImage(file);
+            const fileName = `${currentMemberId}_${Date.now()}_${i}.jpg`;
+            const publicUrl = await uploadImageToSupabase(compressedFile, fileName);
+            uploadedUrls.push(publicUrl);
+          } catch (error) {
+            console.error('Error processing image:', error);
+            alert(`이미지 ${i + 1} 업로드에 실패했습니다.`);
+          }
+        }
+        
+        return uploadedUrls;
+      }
+      
+      // Daily Reading functions
+      let dailyReadingsCache = [];
+      
+      async function loadDailyReadings() {
+        try {
+          const { data, error } = await sb
+            .from('daily_readings')
+            .select('*, club_members(display_name), reading_reactions(emoji, member_id, club_members(display_name))')
+            .order('created_at', { ascending: false })
+            .limit(5);
+          
+          if (error) throw error;
+          
+          dailyReadingsCache = data || [];
+          return dailyReadingsCache;
+        } catch (error) {
+          console.error('Error loading daily readings:', error);
+          return [];
+        }
+      }
+      
+      async function postDailyReading(content) {
+        if (!currentMemberId) {
+          alert("로그인이 필요합니다.");
+          return false;
+        }
+        
+        if (!content || content.trim().length === 0) {
+          alert("내용을 입력해주세요.");
+          return false;
+        }
+        
+        try {
+          const { error } = await sb
+            .from('daily_readings')
+            .insert([
+              { 
+                member_id: currentMemberId, 
+                content: content.trim(),
+                reactions: {
+                  '❤️': 0, '👍': 0, '🔥': 0, '👏': 0,
+                  '😄': 0, '😢': 0, '😡': 0
+                }
+              }
+            ]);
+          
+          if (error) throw error;
+          
+          console.log('Daily reading posted successfully');
+          return true;
+        } catch (error) {
+          console.error('Error posting daily reading:', error);
+          alert('게시에 실패했습니다. 다시 시도해주세요.');
+          return false;
+        }
+      }
+      
+      // Reaction functions
+      const REACTION_EMOJIS = ['❤️', '👍', '🔥', '👏', '😄', '😢', '😡'];
+      
+      async function toggleReaction(readingId, emoji) {
+        if (!currentMemberId) {
+          alert("로그인이 필요합니다.");
+          return false;
+        }
+        
+        if (!REACTION_EMOJIS.includes(emoji)) {
+          console.error('Invalid emoji:', emoji);
+          return false;
+        }
+        
+        try {
+          // Check if user already has this specific emoji reaction
+          const { data: existingReaction, error: fetchError } = await sb
+            .from('reading_reactions')
+            .select('id, emoji')
+            .eq('reading_id', readingId)
+            .eq('member_id', currentMemberId)
+            .eq('emoji', emoji)
+            .single();
+          
+          if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found"
+            throw fetchError;
+          }
+          
+          let success = false;
+          
+          if (existingReaction) {
+            // User has this emoji - DELETE it (Toggle/Cancel)
+            const { error: deleteError } = await sb
+              .from('reading_reactions')
+              .delete()
+              .eq('id', existingReaction.id);
+            
+            if (deleteError) throw deleteError;
+            success = true;
+          } else {
+            // User doesn't have this emoji - INSERT it (Add)
+            const { error: insertError } = await sb
+              .from('reading_reactions')
+              .insert({
+                reading_id: readingId,
+                member_id: currentMemberId,
+                emoji: emoji
+              });
+            
+            if (insertError) throw insertError;
+            success = true;
+          }
+          
+          if (success) {
+            // Update the count in daily_readings table
+            await updateReactionCounts(readingId);
+            
+            // Return the final updated state for optimistic UI verification
+            const { data: finalReading, error: finalError } = await sb
+              .from('daily_readings')
+              .select('reactions')
+              .eq('id', readingId)
+              .single();
+            
+            if (finalError) {
+              console.error('Error fetching final state:', finalError);
+              return true; // Still return true since the operation succeeded
+            }
+            
+            return { success: true, finalReactions: finalReading.reactions };
+          }
+          
+          return false;
+        } catch (error) {
+          console.error('Error toggling reaction:', error);
+          alert('반응 업데이트에 실패했습니다. 다시 시도해주세요.');
+          return false;
+        }
+      }
+      
+      async function updateReactionCounts(readingId) {
+        try {
+          // Get current reactions from daily_readings FIRST
+          const { data: currentReading, error: fetchError } = await sb
+            .from('daily_readings')
+            .select('reactions')
+            .eq('id', readingId)
+            .single();
+          
+          if (fetchError) throw fetchError;
+          
+          console.log('Previous State:', currentReading.reactions);
+          
+          // Count reactions by emoji for this reading
+          const { data: reactionCounts, error: countError } = await sb
+            .from('reading_reactions')
+            .select('emoji')
+            .eq('reading_id', readingId);
+          
+          if (countError) throw countError;
+          
+          // ATOMIC JSONB SYNC - Start with all 7 emoji keys preserved
+          const currentReactions = currentReading.reactions || {};
+          const updatedReactions = {};
+          
+          // CRITICAL: Ensure all 7 emoji keys are present
+          REACTION_EMOJIS.forEach(emoji => {
+            const newCount = reactionCounts?.filter(r => r.emoji === emoji).length || 0;
+            updatedReactions[emoji] = Math.max(0, newCount);
+          });
+          
+          console.log('Reaction counts from DB:', reactionCounts);
+          console.log('Final State to Save:', updatedReactions);
+          console.log('All 7 emoji keys preserved:', Object.keys(updatedReactions).length === 7);
+          
+          // Update the daily_readings table
+          const { error: updateError } = await sb
+            .from('daily_readings')
+            .update({ reactions: updatedReactions })
+            .eq('id', readingId);
+          
+          if (updateError) throw updateError;
+        } catch (error) {
+          console.error('Error updating reaction counts:', error);
+        }
+      }
+      
+      function formatTimeAgo(dateString) {
+        const now = new Date();
+        const created = new Date(dateString);
+        const diffMs = now - created;
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return '방금';
+        if (diffMins < 60) return `${diffMins}분 전`;
+        if (diffMins < 1440) return `${Math.floor(diffMins / 60)}시간 전`;
+        return `${Math.floor(diffMins / 1440)}일 전`;
+      }
+      
+      function formatTime(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      }
+      
+      async function editDailyReading(readingId, newContent) {
+        if (!currentMemberId) {
+          alert("로그인이 필요합니다.");
+          return false;
+        }
+        
+        if (!newContent || newContent.trim().length === 0) {
+          alert("내용을 입력해주세요.");
+          return false;
+        }
+        
+        try {
+          const { error } = await sb
+            .from('daily_readings')
+            .update({ content: newContent.trim() })
+            .eq('id', readingId)
+            .eq('member_id', currentMemberId); // Ensure user can only edit their own comments
+          
+          if (error) throw error;
+          
+          return true;
+        } catch (error) {
+          console.error('Error editing daily reading:', error);
+          alert('수정에 실패했습니다. 다시 시도해주세요.');
+          return false;
+        }
+      }
+      
+      async function deleteDailyReading(readingId) {
+        if (!currentMemberId) {
+          alert("로그인이 필요합니다.");
+          return false;
+        }
+        
+        if (!confirm('정말로 삭제하시겠습니까?')) {
+          return false;
+        }
+        
+        try {
+          // Delete from reading_reactions first (foreign key constraint)
+          await sb
+            .from('reading_reactions')
+            .delete()
+            .eq('reading_id', readingId);
+          
+          // Delete the daily reading
+          const { error } = await sb
+            .from('daily_readings')
+            .delete()
+            .eq('id', readingId)
+            .eq('member_id', currentMemberId); // Ensure user can only delete their own comments
+          
+          if (error) throw error;
+          
+          return true;
+        } catch (error) {
+          console.error('Error deleting daily reading:', error);
+          alert('삭제에 실패했습니다. 다시 시도해주세요.');
+          return false;
+        }
+      }
+      
+      function renderDailyReadingComments() {
+        const container = document.getElementById('daily-reading-comments');
+        if (!container) return;
+        
+        if (dailyReadingsCache.length === 0) {
+          container.innerHTML = `
+            <div class="text-center py-4 text-deep/45 text-sm">
+              아직 독서 기록이 없습니다. 첫 번째 기록을 남겨보세요!
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = dailyReadingsCache.map(reading => {
+          const memberName = reading.club_members?.display_name || '알 수 없음';
+          const timeAgo = formatTimeAgo(reading.created_at);
+          const timeFormatted = formatTime(reading.created_at);
+          const reactions = reading.reactions || {};
+          const isOwner = reading.member_id === currentMemberId;
+          
+          // Get user's current reaction for this reading
+          const userReaction = reading.reading_reactions?.find(r => r.member_id === currentMemberId)?.emoji;
+          
+          // Create reaction chips (only show emojis with count > 0) with attribution
+          const reactionChips = REACTION_EMOJIS
+            .filter(emoji => reactions[emoji] > 0)
+            .map(emoji => {
+              // Get all reactors for this emoji
+              const reactors = reading.reading_reactions?.filter(r => r.emoji === emoji) || [];
+              const reactorNames = reactors.map(r => {
+                if (r.member_id === currentMemberId) {
+                  return `나(${r.club_members?.display_name || '알 수 없음'})`;
+                }
+                return r.club_members?.display_name || '알 수 없음';
+              });
+              
+              const attributionText = reactorNames.length > 0 
+                ? `${reactorNames.join(', ')}님이 리액션을 남겼습니다.`
+                : '';
+              
+              return `
+                <span class="reaction-chip px-2 py-1 bg-deep/10 rounded-full text-xs flex items-center gap-1 cursor-pointer hover:bg-deep/20 transition-colors ${userReaction === emoji ? 'ring-2 ring-deep/30' : ''}" 
+                      data-emoji="${emoji}" 
+                      data-reading-id="${reading.id}"
+                      data-attribution="${escapeHtml(attributionText)}"
+                      title="클릭하여 리액션한 사람 보기">
+                  <span>${emoji}</span>
+                  <span class="font-medium">${reactions[emoji]}</span>
+                </span>
+              `;
+            }).join('');
+          
+          return `
+            <div class="daily-reading-item p-4 bg-deep/5 rounded-lg" data-reading-id="${reading.id}">
+              <div class="flex items-start justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium text-deep">${escapeHtml(memberName)}</span>
+                  <span class="text-xs text-deep/45">${timeFormatted}</span>
+                  <span class="text-xs text-deep/30">${timeAgo}</span>
+                </div>
+                ${isOwner ? `
+                  <div class="flex gap-1">
+                    <button class="edit-btn text-xs text-deep/60 hover:text-deep px-2 py-1 hover:bg-deep/10 rounded" data-reading-id="${reading.id}" data-content="${escapeHtml(reading.content)}">수정</button>
+                    <button class="delete-btn text-xs text-red-600 hover:text-red-700 px-2 py-1 hover:bg-red-50 rounded" data-reading-id="${reading.id}">삭제</button>
+                  </div>
+                ` : ''}
+              </div>
+              
+              <div class="comment-content text-sm text-deep/85 mb-3" data-reading-id="${reading.id}">
+                ${escapeHtml(reading.content)}
+              </div>
+              
+              <div class="flex items-center justify-between">
+                <div class="reaction-chips flex gap-1">
+                  ${reactionChips || '<span class="text-xs text-deep/30">반응이 없습니다</span>'}
+                </div>
+                
+                <button class="reaction-toggle-btn px-3 py-1 bg-deep/10 hover:bg-deep/20 rounded-full text-xs flex items-center gap-1 transition-colors" data-reading-id="${reading.id}">
+                  <span>+</span>
+                  <span>반응</span>
+                </button>
+              </div>
+              
+              <!-- Reaction Popup (hidden by default) -->
+              <div class="reaction-popup hidden absolute z-10 bg-white border border-deep/20 rounded-lg p-2 shadow-lg mt-1" data-reading-id="${reading.id}">
+                <div class="flex gap-1">
+                  ${REACTION_EMOJIS.map(emoji => `
+                    <button class="reaction-option px-3 py-2 hover:bg-deep/10 rounded transition-colors text-lg" data-emoji="${emoji}" data-reading-id="${reading.id}">
+                      ${emoji}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+      
+      async function handleDailyReadingPost(content) {
+        const success = await postDailyReading(content);
+        if (success) {
+          // Clear input
+          const input = document.getElementById('daily-reading-input');
+          if (input) {
+            input.value = '';
+          }
+          
+          // Reload and render comments
+          await loadDailyReadings();
+          renderDailyReadingComments();
+        }
+      }
+      
+      function handleReactionToggle(readingId, emoji) {
+        // INSTANT UI UPDATE - Update local cache optimistically for multi-reaction
+        const reading = dailyReadingsCache.find(r => r.id === readingId);
+        if (reading && reading.reactions) {
+          const userReactionForEmoji = reading.reading_reactions?.find(r => r.member_id === currentMemberId && r.emoji === emoji);
+          
+          if (userReactionForEmoji) {
+            // User has this emoji - DELETE it (Toggle/Cancel)
+            reading.reactions[emoji] = Math.max(0, (reading.reactions[emoji] || 0) - 1);
+            // Remove from reading_reactions array
+            reading.reading_reactions = reading.reading_reactions?.filter(r => !(r.member_id === currentMemberId && r.emoji === emoji)) || [];
+          } else {
+            // User doesn't have this emoji - ADD it
+            reading.reactions[emoji] = (reading.reactions[emoji] || 0) + 1;
+            // Add to reading_reactions array
+            reading.reading_reactions = reading.reading_reactions || [];
+            reading.reading_reactions.push({ member_id: currentMemberId, emoji: emoji });
+          }
+          
+          // Update UI immediately (0ms latency)
+          renderDailyReadingComments();
+        }
+        
+        // FIRE-AND-FORGET database update
+        toggleReaction(readingId, emoji).then(result => {
+          const success = typeof result === 'object' ? result.success : result;
+          
+          if (success) {
+            // Sync with database after successful update
+            setTimeout(() => {
+              loadDailyReadings().then(() => {
+                renderDailyReadingComments();
+              });
+            }, 500);
+          } else {
+            // If failed, revert optimistic update
+            loadDailyReadings().then(() => {
+              renderDailyReadingComments();
+            });
+          }
+        }).catch(error => {
+          // Revert on any error
+          loadDailyReadings().then(() => {
+            renderDailyReadingComments();
+          });
+        });
+      }
+      
+      function handleEditReading(readingId, currentContent) {
+        const newContent = prompt('내용을 수정하세요:', currentContent);
+        if (newContent !== null && newContent.trim() !== currentContent) {
+          // INSTANT UI UPDATE
+          const reading = dailyReadingsCache.find(r => r.id === readingId);
+          if (reading) {
+            reading.content = newContent.trim();
+            renderDailyReadingComments();
+          }
+          
+          // FIRE-AND-FORGET database update
+          editDailyReading(readingId, newContent).then(success => {
+            if (success) {
+              setTimeout(() => {
+                loadDailyReadings().then(() => {
+                  renderDailyReadingComments();
+                });
+              }, 500);
+            } else {
+              // Revert if failed
+              loadDailyReadings().then(() => {
+                renderDailyReadingComments();
+              });
+            }
+          });
+        }
+      }
+      
+      function handleDeleteReading(readingId) {
+        if (confirm('정말로 삭제하시겠습니까?')) {
+          // INSTANT UI UPDATE - Remove from cache
+          const index = dailyReadingsCache.findIndex(r => r.id === readingId);
+          if (index > -1) {
+            dailyReadingsCache.splice(index, 1);
+            renderDailyReadingComments();
+          }
+          
+          // FIRE-AND-FORGET database update
+          deleteDailyReading(readingId).then(success => {
+            if (!success) {
+              // Revert if failed
+              loadDailyReadings().then(() => {
+                renderDailyReadingComments();
+              });
+            }
+          });
+        }
+      }
+      
+      function showReactionTooltip(chipElement, attributionText) {
+        // Remove any existing tooltips
+        const existingTooltip = document.querySelector('.reaction-tooltip');
+        if (existingTooltip) {
+          existingTooltip.remove();
+        }
+        
+        // Create tooltip element
+        const tooltip = document.createElement('div');
+        tooltip.className = 'reaction-tooltip absolute z-20 bg-white border border-deep/20 rounded-lg p-3 shadow-lg text-xs text-deep max-w-xs';
+        tooltip.innerHTML = `
+          <div class="font-medium mb-1">리액션 정보</div>
+          <div>${attributionText}</div>
+        `;
+        
+        // Position tooltip above the chip
+        const chipRect = chipElement.getBoundingClientRect();
+        tooltip.style.bottom = `${chipRect.height + 8}px`;
+        tooltip.style.left = `${chipRect.left + chipRect.width / 2}px`;
+        tooltip.style.transform = 'translateX(-50%)';
+        
+        // Add to body
+        document.body.appendChild(tooltip);
+        
+        // Remove tooltip after 3 seconds or on click outside
+        const removeTooltip = () => {
+          tooltip.remove();
+          document.removeEventListener('click', removeTooltip);
+        };
+        
+        setTimeout(removeTooltip, 3000);
+        document.addEventListener('click', removeTooltip);
+      }
       async function refreshFromDb() {
         const { data, error } = await sb.from("books").select("*");
         if (error) throw error;
@@ -873,7 +1456,136 @@
       function renderMeetingTab() {
         return `<main class="reading-tab-container mx-auto max-w-content pb-28">
           <div class="book-info-section">
-            <section class="paper-panel rounded-2xl border border-deep/10 p-8 shadow-sm text-center">
+            <!-- Create Meeting Log Button -->
+            <section class="paper-panel rounded-2xl border border-deep/10 p-4 shadow-sm mb-4">
+              <div class="flex items-center justify-between">
+                <h2 class="font-serif text-xl text-deep">📸 모임 기록</h2>
+                <button id="create-meeting-btn" class="btn-primary text-sm">+ 새 모임 기록</button>
+              </div>
+            </section>
+
+            <!-- Meeting Logs Feed -->
+            <div class="space-y-4" id="meeting-logs-feed">
+              <!-- Sample Meeting Log 1 -->
+              <article class="paper-panel rounded-2xl border border-deep/10 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
+                <div class="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 class="font-serif text-lg text-deep mb-1">5월 모임</h3>
+                    <div class="flex items-center gap-3 text-sm text-deep/60">
+                      <span class="flex items-center gap-1">📍 <span>가로수길 카페 '북바이브'</span></span>
+                      <span class="flex items-center gap-1">📅 <span>2026-05-15 19:00</span></span>
+                    </div>
+                  </div>
+                  <span class="text-xs text-deep/45 bg-deep/5 px-2 py-1 rounded-full">참여자 4명</span>
+                </div>
+                
+                <!-- Photo Gallery -->
+                <div class="mb-4">
+                  <h4 class="text-sm font-semibold text-deep mb-2">📸 사진</h4>
+                  <div class="flex gap-2 overflow-x-auto pb-2">
+                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
+                      <img src="https://picsum.photos/seed/meeting1-1/200/200.jpg" alt="모임 사진 1" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+                    </div>
+                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
+                      <img src="https://picsum.photos/seed/meeting1-2/200/200.jpg" alt="모임 사진 2" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+                    </div>
+                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
+                      <img src="https://picsum.photos/seed/meeting1-3/200/200.jpg" alt="모임 사진 3" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+                    </div>
+                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
+                      <img src="https://picsum.photos/seed/meeting1-4/200/200.jpg" alt="모임 사진 4" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Summary -->
+                <div class="bg-deep/5 rounded-lg p-3">
+                  <h4 class="text-sm font-semibold text-deep mb-2">📝 모임 요약</h4>
+                  <p class="text-sm text-deep/85 leading-relaxed">
+                    이번 모임에서는 '어린 왕자'를 함께 읽고 각자의 인상 깊었던 구절에 대해 이야기 나눴습니다. 
+                    특히 여우와 어린 왕자의 관계에 대한 토론이 활발했으며, 다음 모임까지 3장까지 읽기로 했습니다.
+                    다과는 Mary가 준비한 수제 쿠키와 차가 큰 사랑을 받았습니다.
+                  </p>
+                </div>
+                
+                <!-- Participants -->
+                <div class="mt-3 flex items-center gap-2">
+                  <span class="text-xs text-deep/60">참여자:</span>
+                  <div class="flex -space-x-2">
+                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
+                      <span class="text-xs font-semibold text-deep">M</span>
+                    </div>
+                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
+                      <span class="text-xs font-semibold text-deep">C</span>
+                    </div>
+                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
+                      <span class="text-xs font-semibold text-deep">C</span>
+                    </div>
+                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
+                      <span class="text-xs font-semibold text-deep">J</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <!-- Sample Meeting Log 2 -->
+              <article class="paper-panel rounded-2xl border border-deep/10 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
+                <div class="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 class="font-serif text-lg text-deep mb-1">4월 모임</h3>
+                    <div class="flex items-center gap-3 text-sm text-deep/60">
+                      <span class="flex items-center gap-1">📍 <span>성수동 서점</span></span>
+                      <span class="flex items-center gap-1">📅 <span>2026-04-17 19:00</span></span>
+                    </div>
+                  </div>
+                  <span class="text-xs text-deep/45 bg-deep/5 px-2 py-1 rounded-full">참여자 3명</span>
+                </div>
+                
+                <!-- Photo Gallery -->
+                <div class="mb-4">
+                  <h4 class="text-sm font-semibold text-deep mb-2">📸 사진</h4>
+                  <div class="flex gap-2 overflow-x-auto pb-2">
+                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
+                      <img src="https://picsum.photos/seed/meeting2-1/200/200.jpg" alt="모임 사진 1" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+                    </div>
+                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
+                      <img src="https://picsum.photos/seed/meeting2-2/200/200.jpg" alt="모임 사진 2" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+                    </div>
+                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
+                      <img src="https://picsum.photos/seed/meeting2-3/200/200.jpg" alt="모임 사진 3" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Summary -->
+                <div class="bg-deep/5 rounded-lg p-3">
+                  <h4 class="text-sm font-semibold text-deep mb-2">� 모임 요약</h4>
+                  <p class="text-sm text-deep/85 leading-relaxed">
+                    '데미안'에 대한 깊이 있는 토론을 진행했습니다. 싱어와 데미안의 관계성에 대해 각자의 해석을 공유하며
+                    성장과 자기 찾기에 대한 의미 있는 대화를 나누었습니다. 책을 통해 얻은 영감과 개인적인 경험을 연결하는 시간이었습니다.
+                  </p>
+                </div>
+                
+                <!-- Participants -->
+                <div class="mt-3 flex items-center gap-2">
+                  <span class="text-xs text-deep/60">참여자:</span>
+                  <div class="flex -space-x-2">
+                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
+                      <span class="text-xs font-semibold text-deep">C</span>
+                    </div>
+                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
+                      <span class="text-xs font-semibold text-deep">M</span>
+                    </div>
+                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
+                      <span class="text-xs font-semibold text-deep">C</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <!-- Empty State (hidden when data exists) -->
+            <div id="empty-meeting-state" class="paper-panel rounded-2xl border border-deep/10 p-8 shadow-sm text-center hidden">
               <div class="mb-6">
                 <div class="inline-flex items-center justify-center w-16 h-16 bg-deep/10 rounded-full mb-4">
                   <svg class="w-8 h-8 text-deep" fill="currentColor" viewBox="0 0 20 20">
@@ -881,32 +1593,11 @@
                     <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 1 1 0 000 2H6a2 2 0 100 4h2a2 2 0 100-4h-.09A1.65 1.65 0 0013 5.5a1.65 1.65 0 00-.09-1.5H14a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
                   </svg>
                 </div>
-                <h2 class="font-serif text-2xl text-deep mb-2">모임 기록</h2>
-                <p class="text-deep/60 text-lg">Meeting Records</p>
+                <h3 class="font-serif text-xl text-deep mb-2">첫 모임 기록을 남겨보세요!</h3>
+                <p class="text-deep/60">소모임의 소중한 순간들을 기록하고 공유할 수 있습니다.</p>
               </div>
-              
-              <div class="max-w-md mx-auto">
-                <div class="bg-deep/5 rounded-lg p-6 border border-deep/10">
-                  <h3 class="font-semibold text-deep mb-3">📅 준비 중입니다</h3>
-                  <p class="text-deep/60 mb-4 leading-relaxed">
-                    모임 기록 기능이 곧 출시됩니다.<br>
-                    소모임의 소중한 순간들을 기록하고 공유할 수 있게 됩니다.
-                  </p>
-                  <div class="flex flex-wrap gap-2 justify-center">
-                    <span class="px-3 py-1 bg-deep/10 rounded-full text-xs text-deep/70">📝 회의록</span>
-                    <span class="px-3 py-1 bg-deep/10 rounded-full text-xs text-deep/70">📸 사진첩</span>
-                    <span class="px-3 py-1 bg-deep/10 rounded-full text-xs text-deep/70">🎯 목표 관리</span>
-                    <span class="px-3 py-1 bg-deep/10 rounded-full text-xs text-deep/70">💬 토론</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="mt-8 text-center">
-                <p class="text-xs text-deep/45">
-                  문의: Chloe (책 임원)
-                </p>
-              </div>
-            </section>
+              <button id="create-first-meeting-btn" class="btn-primary">+ 첫 모임 기록하기</button>
+            </div>
           </div>
         </main>`;
       }
@@ -1020,6 +1711,26 @@
           }).join("");
         
         return `<main class="reading-tab-container mx-auto max-w-content pb-28">
+          <!-- Daily Reading Section -->
+          <section class="paper-panel rounded-2xl border border-deep/10 p-4 shadow-sm mb-4">
+            <h3 class="font-serif text-lg text-deep mb-3">📖 오늘의 읽기</h3>
+            
+            <!-- Input Area -->
+            <div class="mb-4">
+              <div class="flex gap-2">
+                <input type="text" id="daily-reading-input" class="input-field flex-1 text-sm" placeholder="오늘의 독서 생각을 나눠보세요..." maxlength="50">
+                <button id="daily-reading-post" class="btn-primary px-3 py-2 text-sm">게시</button>
+              </div>
+              <p class="mt-1 text-xs text-deep/45">${currentMemberName}님으로 게시됩니다</p>
+            </div>
+            
+                        
+            <!-- Recent Comments -->
+            <div class="space-y-2" id="daily-reading-comments">
+              <!-- Comments will be rendered here by renderDailyReadingComments() -->
+            </div>
+          </section>
+          
           <!-- Book Info Section -->
           <div class="book-info-section">
             <section class="paper-panel rounded-2xl border border-deep/10 p-4 shadow-sm">
@@ -1496,6 +2207,13 @@
         
         // Render main app content in app-root (modals are handled separately)
         root.innerHTML = `${isGatePassed && currentMemberId ? renderHeader() : ""}${main}${isGatePassed && currentMemberId ? renderBottomTabs() : ""}${toast}`;
+        
+        // Render daily reading comments if reading tab is active
+        if (isGatePassed && currentMemberId && currentTab === "reading") {
+          setTimeout(() => {
+            renderDailyReadingComments();
+          }, 100);
+        }
       }
 
       function askSecure(action, message) {
@@ -1564,7 +2282,17 @@
             }
             return renderApp();
           }
-          const closeModalBtn = t.closest && t.closest("[data-close-modal]");
+          
+          // Daily Reading event handlers
+          if (t.id === "daily-reading-post") {
+            const input = document.getElementById('daily-reading-input');
+            const content = input ? input.value : '';
+            
+            handleDailyReadingPost(content);
+            return;
+          }
+          
+                    const closeModalBtn = t.closest && t.closest("[data-close-modal]");
           if (closeModalBtn) {
             closeModal();
             return renderApp();
@@ -1599,6 +2327,81 @@
             const picked = (el.value || "").trim();
             openModal("book-settings", { bookId: picked || "" });
             renderApp();
+          }
+        });
+
+        // Event delegation for daily reading interactions
+        document.addEventListener("click", (e) => {
+          const dailyReadingContainer = document.getElementById('daily-reading-comments');
+          if (!dailyReadingContainer || !e.target.closest('#daily-reading-comments')) {
+            // Close all reaction popups when clicking outside daily reading area
+            document.querySelectorAll('.reaction-popup').forEach(popup => {
+              popup.classList.add('hidden');
+            });
+            return;
+          }
+          
+          // Reaction toggle button (+ Reaction)
+          const reactionToggleBtn = e.target.closest('.reaction-toggle-btn');
+          if (reactionToggleBtn) {
+            const readingId = reactionToggleBtn.getAttribute('data-reading-id');
+            const popup = document.querySelector(`.reaction-popup[data-reading-id="${readingId}"]`);
+            
+            if (popup) {
+              popup.classList.toggle('hidden');
+              
+              // Close other popups
+              document.querySelectorAll('.reaction-popup').forEach(p => {
+                if (p !== popup) p.classList.add('hidden');
+              });
+            }
+            return;
+          }
+          
+          // Reaction option from popup
+          const reactionOption = e.target.closest('.reaction-option');
+          if (reactionOption) {
+            const readingId = reactionOption.getAttribute('data-reading-id');
+            const emoji = reactionOption.getAttribute('data-emoji');
+            
+            handleReactionToggle(readingId, emoji);
+            
+            // Close popup
+            const popup = document.querySelector(`.reaction-popup[data-reading-id="${readingId}"]`);
+            if (popup) popup.classList.add('hidden');
+            return;
+          }
+          
+          // Edit button
+          const editBtn = e.target.closest('.edit-btn');
+          if (editBtn) {
+            const readingId = editBtn.getAttribute('data-reading-id');
+            const content = editBtn.getAttribute('data-content');
+            
+            handleEditReading(readingId, content);
+            return;
+          }
+          
+          // Delete button
+          const deleteBtn = e.target.closest('.delete-btn');
+          if (deleteBtn) {
+            const readingId = deleteBtn.getAttribute('data-reading-id');
+            
+            handleDeleteReading(readingId);
+            return;
+          }
+          
+          // Reaction chip click (show attribution tooltip)
+          const reactionChip = e.target.closest('.reaction-chip');
+          if (reactionChip) {
+            const emoji = reactionChip.getAttribute('data-emoji');
+            const readingId = reactionChip.getAttribute('data-reading-id');
+            const attribution = reactionChip.getAttribute('data-attribution');
+            
+            if (attribution) {
+              showReactionTooltip(reactionChip, attribution);
+            }
+            return;
           }
         });
 
