@@ -1454,153 +1454,31 @@
         return `<section class="paper-panel mt-4 rounded-2xl border border-deep/10 p-4 shadow-sm"><h3 class="font-semibold text-deep">책 정보 설정</h3><p class="mt-1 text-xs text-deep/55">${canEdit ? "저장 시 길잡이 본인 인증이 필요합니다." : "해당 책의 길잡이만 수정 가능합니다."}</p><form id="form-book-edit" class="mt-3 grid gap-3" data-book="${book.id}"><input class="input-field" name="title" value="${escapeHtml(book.title)}" ${canEdit ? "" : "disabled"} /><input class="input-field" name="author" value="${escapeHtml(book.author)}" ${canEdit ? "" : "disabled"} /><input class="input-field" name="coverUrl" value="${escapeHtml(book.coverUrl)}" ${canEdit ? "" : "disabled"} /><select class="input-field" name="guideId" ${isAdmin ? "" : "disabled"}>${memberList().map((m) => `<option value="${m.id}" ${book.guideId === m.id ? "selected" : ""}>길잡이: ${escapeHtml(m.display_name)}</option>`).join("")}</select><input class="input-field" type="number" min="1" max="50" name="totalChapters" value="${book.totalChapters}" ${canEdit ? "" : "disabled"} /><button class="btn-primary ${canEdit ? "" : "opacity-40"}" ${canEdit ? "" : "disabled"}>저장</button></form></section>`;
       }
       function renderMeetingTab() {
-        return `<main class="reading-tab-container mx-auto max-w-content pb-28">
-          <div class="book-info-section">
-            <!-- Create Meeting Log Button -->
-            <section class="paper-panel rounded-2xl border border-deep/10 p-4 shadow-sm mb-4">
-              <div class="flex items-center justify-between">
-                <h2 class="font-serif text-xl text-deep">📸 모임 기록</h2>
-                <button id="create-meeting-btn" class="btn-primary text-sm">+ 새 모임 기록</button>
-              </div>
-            </section>
+  if (meetingLoading) {
+    return `<main class="mx-auto max-w-content px-4 py-6 pb-28 text-center text-deep/45 text-sm">로딩 중...</main>`;
+  }
 
-            <!-- Meeting Logs Feed -->
-            <div class="space-y-4" id="meeting-logs-feed">
-              <!-- Sample Meeting Log 1 -->
-              <article class="paper-panel rounded-2xl border border-deep/10 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
-                <div class="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 class="font-serif text-lg text-deep mb-1">5월 모임</h3>
-                    <div class="flex items-center gap-3 text-sm text-deep/60">
-                      <span class="flex items-center gap-1">📍 <span>가로수길 카페 '북바이브'</span></span>
-                      <span class="flex items-center gap-1">📅 <span>2026-05-15 19:00</span></span>
-                    </div>
-                  </div>
-                  <span class="text-xs text-deep/45 bg-deep/5 px-2 py-1 rounded-full">참여자 4명</span>
-                </div>
-                
-                <!-- Photo Gallery -->
-                <div class="mb-4">
-                  <h4 class="text-sm font-semibold text-deep mb-2">📸 사진</h4>
-                  <div class="flex gap-2 overflow-x-auto pb-2">
-                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
-                      <img src="https://picsum.photos/seed/meeting1-1/200/200.jpg" alt="모임 사진 1" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
-                    </div>
-                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
-                      <img src="https://picsum.photos/seed/meeting1-2/200/200.jpg" alt="모임 사진 2" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
-                    </div>
-                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
-                      <img src="https://picsum.photos/seed/meeting1-3/200/200.jpg" alt="모임 사진 3" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
-                    </div>
-                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
-                      <img src="https://picsum.photos/seed/meeting1-4/200/200.jpg" alt="모임 사진 4" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Summary -->
-                <div class="bg-deep/5 rounded-lg p-3">
-                  <h4 class="text-sm font-semibold text-deep mb-2">📝 모임 요약</h4>
-                  <p class="text-sm text-deep/85 leading-relaxed">
-                    이번 모임에서는 '어린 왕자'를 함께 읽고 각자의 인상 깊었던 구절에 대해 이야기 나눴습니다. 
-                    특히 여우와 어린 왕자의 관계에 대한 토론이 활발했으며, 다음 모임까지 3장까지 읽기로 했습니다.
-                    다과는 Mary가 준비한 수제 쿠키와 차가 큰 사랑을 받았습니다.
-                  </p>
-                </div>
-                
-                <!-- Participants -->
-                <div class="mt-3 flex items-center gap-2">
-                  <span class="text-xs text-deep/60">참여자:</span>
-                  <div class="flex -space-x-2">
-                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
-                      <span class="text-xs font-semibold text-deep">M</span>
-                    </div>
-                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
-                      <span class="text-xs font-semibold text-deep">C</span>
-                    </div>
-                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
-                      <span class="text-xs font-semibold text-deep">C</span>
-                    </div>
-                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
-                      <span class="text-xs font-semibold text-deep">J</span>
-                    </div>
-                  </div>
-                </div>
-              </article>
+  // 1. 하드코딩된 더미 데이터를 배제하고, 실제 Supabase 캐시 데이터 기반으로 카드 배열 생성
+  const cardsHtml = meetingEventsCache.length
+    ? meetingEventsCache.map(renderMeetingEventCard).join("")
+    : `<div class="meeting-empty-state paper-panel rounded-2xl border border-deep/10 p-8 text-center">
+        <p class="text-4xl mb-3">📸</p>
+        <h3 class="font-serif text-xl text-deep mb-2">첫 모임 기록을 남겨보세요!</h3>
+        <p class="text-sm text-deep/65">책을 읽고 함께 모인 소중한 순간들을 기록하고 공유할 수 있습니다.</p>
+      </div>`;
 
-              <!-- Sample Meeting Log 2 -->
-              <article class="paper-panel rounded-2xl border border-deep/10 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
-                <div class="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 class="font-serif text-lg text-deep mb-1">4월 모임</h3>
-                    <div class="flex items-center gap-3 text-sm text-deep/60">
-                      <span class="flex items-center gap-1">📍 <span>성수동 서점</span></span>
-                      <span class="flex items-center gap-1">📅 <span>2026-04-17 19:00</span></span>
-                    </div>
-                  </div>
-                  <span class="text-xs text-deep/45 bg-deep/5 px-2 py-1 rounded-full">참여자 3명</span>
-                </div>
-                
-                <!-- Photo Gallery -->
-                <div class="mb-4">
-                  <h4 class="text-sm font-semibold text-deep mb-2">📸 사진</h4>
-                  <div class="flex gap-2 overflow-x-auto pb-2">
-                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
-                      <img src="https://picsum.photos/seed/meeting2-1/200/200.jpg" alt="모임 사진 1" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
-                    </div>
-                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
-                      <img src="https://picsum.photos/seed/meeting2-2/200/200.jpg" alt="모임 사진 2" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
-                    </div>
-                    <div class="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden">
-                      <img src="https://picsum.photos/seed/meeting2-3/200/200.jpg" alt="모임 사진 3" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Summary -->
-                <div class="bg-deep/5 rounded-lg p-3">
-                  <h4 class="text-sm font-semibold text-deep mb-2">� 모임 요약</h4>
-                  <p class="text-sm text-deep/85 leading-relaxed">
-                    '데미안'에 대한 깊이 있는 토론을 진행했습니다. 싱어와 데미안의 관계성에 대해 각자의 해석을 공유하며
-                    성장과 자기 찾기에 대한 의미 있는 대화를 나누었습니다. 책을 통해 얻은 영감과 개인적인 경험을 연결하는 시간이었습니다.
-                  </p>
-                </div>
-                
-                <!-- Participants -->
-                <div class="mt-3 flex items-center gap-2">
-                  <span class="text-xs text-deep/60">참여자:</span>
-                  <div class="flex -space-x-2">
-                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
-                      <span class="text-xs font-semibold text-deep">C</span>
-                    </div>
-                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
-                      <span class="text-xs font-semibold text-deep">M</span>
-                    </div>
-                    <div class="w-6 h-6 bg-deep/20 rounded-full border-2 border-white flex items-center justify-center">
-                      <span class="text-xs font-semibold text-deep">C</span>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            </div>
-
-            <!-- Empty State (hidden when data exists) -->
-            <div id="empty-meeting-state" class="paper-panel rounded-2xl border border-deep/10 p-8 shadow-sm text-center hidden">
-              <div class="mb-6">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-deep/10 rounded-full mb-4">
-                  <svg class="w-8 h-8 text-deep" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
-                    <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 1 1 0 000 2H6a2 2 0 100 4h2a2 2 0 100-4h-.09A1.65 1.65 0 0013 5.5a1.65 1.65 0 00-.09-1.5H14a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
-                  </svg>
-                </div>
-                <h3 class="font-serif text-xl text-deep mb-2">첫 모임 기록을 남겨보세요!</h3>
-                <p class="text-deep/60">소모임의 소중한 순간들을 기록하고 공유할 수 있습니다.</p>
-              </div>
-              <button id="create-first-meeting-btn" class="btn-primary">+ 첫 모임 기록하기</button>
-            </div>
-          </div>
-        </main>`;
-      }
+  // 2. 피드 컨테이너 내부에 dynamic하게 생성된 cardsHtml 주입
+  return `
+    <main class="mx-auto max-w-content px-4 py-5 pb-28">
+      <div class="meeting-tab-top flex items-center justify-between mb-5">
+        <h2 class="font-serif text-xl text-deep">📸 모임 기록</h2>
+        <button class="btn-primary !text-sm" id="btn-new-meeting-event">+ 새 모임 기록</button>
+      </div>
+      <div class="meeting-events-feed space-y-4">
+        ${cardsHtml}
+      </div>
+    </main>`;
+}
       
       function renderReadingTab() {
         const selected = cache.books.find((b) => b.id === currentBookId) || cache.books[0];
