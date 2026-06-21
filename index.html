@@ -351,14 +351,16 @@
       }
       .meeting-event-title {
         font-family: Georgia, serif;
-        font-size: 1rem;
-        font-weight: 600;
-        color: #0c1f18;
-        margin-bottom: 0.2rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: rgba(12, 31, 24, 0.65);
+        margin-bottom: 0.15rem;
       }
       .meeting-event-sub {
-        font-size: 0.78rem;
-        color: rgba(12, 31, 24, 0.55);
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #0c1f18;
+        margin-bottom: 0.1rem;
       }
       .meeting-event-creator {
         font-size: 0.7rem;
@@ -1930,8 +1932,8 @@
                   ? `<img src="${escapeHtml(coverUrl)}" alt="${escapeHtml(bookTitle)}" class="meeting-cover-thumb"/>`
                   : `<div class="meeting-cover-thumb meeting-cover-placeholder">📚</div>`}
                 <div>
-                  <h3 class="meeting-event-title">${escapeHtml(bookTitle)}</h3>
                   <p class="meeting-event-sub">${dateStr} · ${escapeHtml(event.location || "장소 미정")}</p>
+                  <h3 class="meeting-event-title">${escapeHtml(bookTitle)}</h3>
                   <p class="meeting-event-creator">등록: ${escapeHtml(creatorName)}</p>
                 </div>
               </div>
@@ -2552,8 +2554,8 @@
       }
       function renderAuthModal() {
         if (!uiModal.type) return "";
-        if (uiModal.type === "first-login") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-xl">처음 오셨네요!</h2><p class="mt-2 text-sm text-deep/60">앞으로 사용할 비밀번호를 설정해주세요.</p><form id="form-first-password" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="새 비밀번호" required /><input type="password" name="confirmPassword" class="input-field" placeholder="새 비밀번호 확인" required /><button class="btn-primary w-full">저장</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
-        if (uiModal.type === "secure-confirm") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><h2 class="font-serif text-xl">본인 인증</h2><p class="mt-2 text-sm text-deep/60">${escapeHtml(uiModal.meta.message || "")}</p><form id="form-secure-confirm" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="개인 비밀번호" required /><button class="btn-primary w-full">확인</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
+        if (uiModal.type === "first-login") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><div class="mb-3 flex items-center justify-between"><h2 class="font-serif text-xl">처음 오셨네요!</h2><button class="btn-ghost !px-2.5 !py-1 !text-xs" data-close-modal="1">닫기</button></div><p class="mt-2 text-sm text-deep/60">앞으로 사용할 비밀번호를 설정해주세요.</p><form id="form-first-password" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="새 비밀번호" required /><input type="password" name="confirmPassword" class="input-field" placeholder="새 비밀번호 확인" required /><button class="btn-primary w-full">저장</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
+        if (uiModal.type === "secure-confirm") return `<div class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-5"><div class="paper-panel w-full max-w-sm rounded-2xl border border-deep/10 p-6 shadow-2xl"><div class="mb-3 flex items-center justify-between"><h2 class="font-serif text-xl">본인 인증</h2><button class="btn-ghost !px-2.5 !py-1 !text-xs" data-close-modal="1">닫기</button></div><p class="mt-2 text-sm text-deep/60">${escapeHtml(uiModal.meta.message || "")}</p><form id="form-secure-confirm" class="mt-4 space-y-3"><input type="password" name="password" class="input-field" placeholder="개인 비밀번호" required /><button class="btn-primary w-full">확인</button></form>${uiModal.error ? `<p class="mt-2 text-xs text-red-700">${escapeHtml(uiModal.error)}</p>` : ""}</div></div>`;
         return "";
       }
 
