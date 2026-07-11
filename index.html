@@ -87,8 +87,8 @@
       .meeting-post-author { font-size: 0.9rem; font-weight: 600; color: #1a1a2e; }
       .meeting-post-actions { display: flex; gap: 0.5rem; }
       .meeting-post-content { font-size: 0.95rem; color: rgba(26, 26, 46, 0.85); line-height: 1.6; white-space: pre-wrap; }
-      .meeting-photo-strip { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.75rem; margin-bottom: 0.75rem; scrollbar-width: thin; }
-      .meeting-photo-strip img { width: 100px; height: 100px; object-fit: cover; border-radius: 12px; flex-shrink: 0; cursor: pointer; transition: transform 0.3s ease, box-shadow 0.3s ease; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+      .meeting-photo-strip { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.75rem; margin-bottom: 0.75rem; scrollbar-width: thin; scroll-snap-type: x mandatory; }
+      .meeting-photo-strip img { width: 120px; height: 120px; min-width: 120px; min-height: 120px; object-fit: cover; border-radius: 12px; flex-shrink: 0; cursor: pointer; transition: transform 0.3s ease, box-shadow 0.3s ease; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); scroll-snap-align: start; }
       .meeting-photo-strip img:hover { transform: scale(1.08); box-shadow: 0 8px 20px rgba(108, 92, 231, 0.3); }
       .meeting-add-section { border-top: 1px solid rgba(0, 0, 0, 0.06); padding-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
       .meeting-add-form { display: flex; flex-direction: column; gap: 0.75rem; padding-top: 0.25rem; }
@@ -97,6 +97,17 @@
       .photo-preview-thumb { width: 70px; height: 70px; object-fit: cover; border-radius: 10px; border: 2px solid rgba(108, 92, 231, 0.2); }
       .meeting-empty-state { text-align: center; padding: 4rem 1rem; color: rgba(26, 26, 46, 0.5); }
       .meeting-empty-posts { font-size: 0.9rem; color: rgba(26, 26, 46, 0.4); text-align: center; padding: 0.75rem 0; font-style: italic; }
+      /* Image Viewer Modal */
+      .image-viewer { position: fixed; inset: 0; z-index: 10000; background: rgba(0, 0, 0, 0.95); display: flex; align-items: center; justify-content: center; }
+      .image-viewer-container { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+      .image-viewer-img { max-width: 90%; max-height: 90%; object-fit: contain; }
+      .image-viewer-close { position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.2); color: white; border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+      .image-viewer-close:hover { background: rgba(255, 255, 255, 0.3); }
+      .image-viewer-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.2); color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+      .image-viewer-nav:hover { background: rgba(255, 255, 255, 0.3); }
+      .image-viewer-prev { left: 20px; }
+      .image-viewer-next { right: 20px; }
+      .image-viewer-counter { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); color: white; font-size: 14px; background: rgba(0, 0, 0, 0.5); padding: 8px 16px; border-radius: 20px; }
     </style>
   </head>
   <body class="app-bg min-h-screen antialiased">
@@ -136,6 +147,7 @@
       let toastTimer = null;
       let rtChannel = null;
       let debounceTimer = null;
+      let imageViewerState = { isOpen: false, images: [], currentIndex: 0 };
 
       // ── URL 인증 ──
       function checkUrlAuthentication() {
@@ -595,6 +607,104 @@
         </main>`;
       }
 
+      // ── Image Viewer Functions ──
+      function openImageViewer(images, startIndex = 0) {
+        imageViewerState = { isOpen: true, images: images, currentIndex: startIndex };
+        renderImageViewer();
+      }
+
+      function closeImageViewer() {
+        imageViewerState = { isOpen: false, images: [], currentIndex: 0 };
+        const viewer = document.getElementById('image-viewer');
+        if (viewer) viewer.remove();
+      }
+
+      function navigateImageViewer(direction) {
+        const { images, currentIndex } = imageViewerState;
+        if (images.length === 0) return;
+        
+        if (direction === 'next') {
+          imageViewerState.currentIndex = (currentIndex + 1) % images.length;
+        } else if (direction === 'prev') {
+          imageViewerState.currentIndex = (currentIndex - 1 + images.length) % images.length;
+        }
+        
+        renderImageViewer();
+      }
+
+      function renderImageViewer() {
+        const { isOpen, images, currentIndex } = imageViewerState;
+        if (!isOpen || images.length === 0) return;
+
+        let viewer = document.getElementById('image-viewer');
+        if (!viewer) {
+          viewer = document.createElement('div');
+          viewer.id = 'image-viewer';
+          viewer.className = 'image-viewer';
+          document.body.appendChild(viewer);
+        }
+
+        const currentImage = images[currentIndex];
+        viewer.innerHTML = `
+          <div class="image-viewer-container">
+            <img src="${escapeHtml(currentImage)}" alt="이미지" class="image-viewer-img"/>
+            <button class="image-viewer-close" onclick="window.closeImageViewer()">×</button>
+            ${images.length > 1 ? `
+              <button class="image-viewer-nav image-viewer-prev" onclick="window.navigateImageViewer('prev')">‹</button>
+              <button class="image-viewer-nav image-viewer-next" onclick="window.navigateImageViewer('next')">›</button>
+              <div class="image-viewer-counter">${currentIndex + 1} / ${images.length}</div>
+            ` : ''}
+          </div>
+        `;
+
+        // Add touch swipe support
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        viewer.addEventListener('touchstart', (e) => {
+          touchStartX = e.changedTouches[0].screenX;
+        }, { passive: true });
+
+        viewer.addEventListener('touchend', (e) => {
+          touchEndX = e.changedTouches[0].screenX;
+          handleSwipe();
+        }, { passive: true });
+
+        function handleSwipe() {
+          const swipeThreshold = 50;
+          const diff = touchStartX - touchEndX;
+          
+          if (Math.abs(diff) > swipeThreshold) {
+            if (diff > 0) {
+              navigateImageViewer('next');
+            } else {
+              navigateImageViewer('prev');
+            }
+          }
+        }
+
+        // Add keyboard navigation
+        const handleKeydown = (e) => {
+          if (!imageViewerState.isOpen) return;
+          
+          if (e.key === 'Escape') {
+            closeImageViewer();
+          } else if (e.key === 'ArrowLeft') {
+            navigateImageViewer('prev');
+          } else if (e.key === 'ArrowRight') {
+            navigateImageViewer('next');
+          }
+        };
+
+        document.addEventListener('keydown', handleKeydown);
+        viewer.dataset.keydownHandler = 'true';
+      }
+
+      // Expose functions to window
+      window.openImageViewer = openImageViewer;
+      window.closeImageViewer = closeImageViewer;
+      window.navigateImageViewer = navigateImageViewer;
+
       function renderMeetingEventCard(event) {
         const posts=meetingPostsCache[event.id]||[], bTitle=event.books?.title||"책 미지정", coverUrl=event.books?.cover_url||"";
         const creatorName=event.club_members?.display_name||"알 수 없음", isCreator=event.created_by===currentMemberId;
@@ -603,7 +713,7 @@
         const postsHtml=posts.map(post=>{
           const photos=Array.isArray(post.photo_urls)?post.photo_urls:[], isOwner=post.member_id===currentMemberId;
           const mName=post.club_members?.display_name||"알 수 없음";
-          const photosHtml=photos.length?`<div class="meeting-photo-strip">${photos.map(url=>`<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="모임 사진" loading="lazy"/></a>`).join("")}</div>`:"";
+          const photosHtml=photos.length?`<div class="meeting-photo-strip">${photos.map((url, idx) => `<img src="${escapeHtml(url)}" alt="모임 사진" loading="lazy" onclick="window.openImageViewer(${JSON.stringify(photos)}, ${idx})"/>`).join("")}</div>`:"";
           return `<div class="meeting-post" data-post-id="${post.id}" data-event-id="${event.id}"><div class="meeting-post-header"><span class="meeting-post-author">${escapeHtml(mName)}</span>${isOwner?`<div class="meeting-post-actions"><button class="mp-edit-btn btn-ghost !px-2 !py-1 !text-xs" data-post-id="${post.id}" data-event-id="${event.id}" data-content="${escapeHtml(post.content)}">수정</button><button class="mp-delete-btn btn-ghost !px-2 !py-1 !text-xs text-red-600" data-post-id="${post.id}" data-event-id="${event.id}">삭제</button></div>`:""}</div>${photosHtml}${post.content?`<p class="meeting-post-content">${escapeHtml(post.content)}</p>`:""}</div>`;
         }).join("");
         const addFormHtml=`<div class="meeting-add-form" id="add-form-${event.id}" ${myPost?'style="display:none"':""}><textarea class="input-field text-sm" rows="2" id="post-content-${event.id}" placeholder="이번 모임 소감을 남겨보세요..."></textarea><div class="meeting-photo-upload"><label class="btn-ghost !px-3 !py-2 !text-xs cursor-pointer">📷 사진 추가 (최대 5장)<input type="file" accept="image/*" multiple id="post-photos-${event.id}" style="display:none"/></label><div class="photo-preview-strip" id="preview-${event.id}"></div></div><button class="btn-primary !text-xs mp-post-btn" data-event-id="${event.id}">기록 등록</button></div>`;
