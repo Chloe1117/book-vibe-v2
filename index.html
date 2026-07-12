@@ -328,7 +328,7 @@
 
       // ── Daily Readings ──
       let dailyReadingsCache = [];
-      const REACTION_EMOJIS = ['❤️','👍','','😄','😢','🤣','🎉','�','🤔'];
+      const REACTION_EMOJIS = ['❤️','👍','🔥','👏','😄','😢','😡','🤔','🤣','🎉'];
       async function loadDailyReadings() {
         try {
           const { data, error } = await sb.from('daily_readings')
@@ -407,8 +407,8 @@
               <div class="flex gap-1">${chips||'<span class="text-xs text-deep/30">반응 없음</span>'}</div>
               <button class="reaction-toggle-btn px-3 py-1 bg-deep/10 hover:bg-deep/20 rounded-full text-xs" data-reading-id="${r.id}">+ 반응</button>
             </div>
-            <div class="reaction-popup hidden absolute z-10 bg-white border border-deep/20 rounded-lg p-2 shadow-lg mt-1" data-reading-id="${r.id}">
-              <div class="flex gap-1">${REACTION_EMOJIS.map(e=>`<button class="reaction-option px-3 py-2 hover:bg-deep/10 rounded text-lg" data-emoji="${e}" data-reading-id="${r.id}">${e}</button>`).join('')}</div>
+            <div class="reaction-popup hidden absolute z-10 bg-white border border-deep/20 rounded-lg p-2 shadow-lg mt-1" style="width:max-content;max-width:calc(100vw - 2.5rem);" data-reading-id="${r.id}">
+              <div class="grid gap-0.5" style="grid-template-columns:repeat(${Math.ceil(REACTION_EMOJIS.length/2)},minmax(0,1fr));">${REACTION_EMOJIS.map(e=>`<button class="reaction-option px-2 py-1.5 hover:bg-deep/10 rounded text-base" data-emoji="${e}" data-reading-id="${r.id}">${e}</button>`).join('')}</div>
             </div>
           </div>`;
         }).join('');
