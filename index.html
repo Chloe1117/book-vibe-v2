@@ -328,7 +328,7 @@
 
       // ── Daily Readings ──
       let dailyReadingsCache = [];
-      const REACTION_EMOJIS = ['❤️','👍','🔥','👏','😄','😢','😡'];
+      const REACTION_EMOJIS = ['❤️','👍','','😄','😢','🤣','🎉','�','🤔'];
       async function loadDailyReadings() {
         try {
           const { data, error } = await sb.from('daily_readings')
@@ -340,14 +340,16 @@
       }
       async function postDailyReading(content) {
         if (!currentMemberId||!content?.trim()) return false;
+        const initialReactions = {};
+        REACTION_EMOJIS.forEach(e => initialReactions[e] = 0);
         const { error } = await sb.from('daily_readings').insert([{
           member_id:currentMemberId, content:content.trim(),
-          reactions:{'❤️':0,'👍':0,'🔥':0,'👏':0,'😄':0,'😢':0,'😡':0}
+          reactions:initialReactions
         }]);
         return !error;
       }
       async function toggleReaction(readingId, emoji) {
-        if (!currentMemberId||!REACTION_EMOJIS.includes(emoji)) return false;
+        if (!currentMemberId) return false;
         try {
           const { data:ex, error:fe } = await sb.from('reading_reactions').select('id')
             .eq('reading_id',readingId).eq('member_id',currentMemberId).eq('emoji',emoji).single();
@@ -355,7 +357,13 @@
           if (ex) await sb.from('reading_reactions').delete().eq('id',ex.id);
           else await sb.from('reading_reactions').insert({reading_id:readingId,member_id:currentMemberId,emoji});
           const { data:counts } = await sb.from('reading_reactions').select('emoji').eq('reading_id',readingId);
-          const updated = {}; REACTION_EMOJIS.forEach(e => { updated[e]=Math.max(0,(counts||[]).filter(r=>r.emoji===e).length); });
+          // Get existing reactions to preserve history
+          const { data:reading } = await sb.from('daily_readings').select('reactions').eq('id',readingId).single();
+          const existingReactions = reading?.reactions || {};
+          const updated = { ...existingReactions };
+          // Update counts for all emojis that have reactions
+          const allEmojis = [...new Set([...REACTION_EMOJIS, ...Object.keys(existingReactions)])];
+          allEmojis.forEach(e => { updated[e]=Math.max(0,(counts||[]).filter(r=>r.emoji===e).length); });
           await sb.from('daily_readings').update({reactions:updated}).eq('id',readingId);
           return true;
         } catch(e) { console.error(e); return false; }
@@ -382,7 +390,9 @@
         el.innerHTML = dailyReadingsCache.map(r => {
           const name=r.club_members?.display_name||'알 수 없음', isOwner=r.member_id===currentMemberId;
           const reactions=r.reactions||{};
-          const chips = REACTION_EMOJIS.filter(e=>reactions[e]>0).map(e => {
+          // Show all existing reactions, not just new ones
+          const allEmojis = Object.keys(reactions).filter(e => reactions[e] > 0);
+          const chips = allEmojis.map(e => {
             const reactors=(r.reading_reactions||[]).filter(x=>x.emoji===e);
             const names=reactors.map(x=>x.member_id===currentMemberId?`나(${x.club_members?.display_name||'?'})`:x.club_members?.display_name||'?');
             return `<span class="reaction-chip px-2 py-1 bg-deep/10 rounded-full text-xs flex items-center gap-1 cursor-pointer hover:bg-deep/20" data-emoji="${e}" data-reading-id="${r.id}" data-attribution="${escapeHtml(names.join(', ')+'님이 리액션을 남겼습니다.')}"><span>${e}</span><span class="font-medium">${reactions[e]}</span></span>`;
