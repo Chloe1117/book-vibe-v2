@@ -69,10 +69,19 @@
       .cal-legend-chip { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: rgba(26, 26, 46, 0.65); cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 999px; background: rgba(0,0,0,0.03); }
       .cal-legend-chip:hover { background: rgba(108, 92, 231, 0.1); }
       .cal-legend-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
-      .cal-thumbnails { position: absolute; bottom: 2px; right: 2px; display: flex; gap: 2px; }
-      .cal-thumbnail { width: 16px; height: 16px; border-radius: 3px; object-fit: cover; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.2s; }
-      .cal-thumbnail:hover { transform: scale(1.2); z-index: 10; }
-      .cal-thumbnail-more { font-size: 8px; background: rgba(108, 92, 231, 0.8); color: white; border-radius: 3px; padding: 1px 3px; line-height: 1; }
+      .cal-thumbnails { position: absolute; top: 2px; right: 2px; display: flex; gap: 3px; z-index: 5; }
+      .cal-thumbnail { width: 24px; height: 36px; border-radius: 4px; object-fit: cover; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: transform 0.2s; aspect-ratio: 2/3; }
+      .cal-thumbnail:hover { transform: scale(1.3); z-index: 10; }
+      .cal-thumbnail-more { font-size: 10px; background: rgba(108, 92, 231, 0.9); color: white; border-radius: 4px; padding: 2px 4px; line-height: 1; min-width: 18px; text-align: center; }
+      @media (min-width: 768px) {
+        .cal-thumbnail { width: 32px; height: 48px; border-radius: 6px; }
+        .cal-thumbnail-more { font-size: 12px; padding: 3px 6px; min-width: 22px; }
+      }
+      @media (max-width: 767px) {
+        .cal-thumbnails { top: 2px; right: 2px; gap: 2px; }
+        .cal-thumbnail { width: 20px; height: 30px; border-radius: 3px; }
+        .cal-thumbnail-more { font-size: 9px; padding: 1px 3px; min-width: 16px; }
+      }
       .reading-tab-container { padding: 24px; }
       .book-info-section { margin-bottom: 40px; }
       .schedule-section { margin-bottom: 32px; }
