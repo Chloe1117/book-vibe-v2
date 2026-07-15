@@ -537,22 +537,31 @@
               ${isOwner?`<div class="flex gap-1"><button class="edit-btn text-xs text-deep/60 hover:text-deep px-2 py-1 hover:bg-deep/10 rounded" data-reading-id="${r.id}" data-content="${escapeHtml(r.content)}">수정</button><button class="delete-btn text-xs text-red-600 px-2 py-1 hover:bg-red-50 rounded" data-reading-id="${r.id}">삭제</button></div>`:''}
             </div>
             <div class="text-sm text-deep/85 mb-3">${escapeHtml(r.content)}</div>
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between relative">
               <div class="flex gap-1">${chips||'<span class="text-xs text-deep/30">반응 없음</span>'}</div>
-              <button class="reaction-toggle-btn px-3 py-1 bg-deep/10 hover:bg-deep/20 rounded-full text-xs" data-reading-id="${r.id}">+ 반응</button>
-            </div>
-            <div class="reaction-popup hidden absolute z-10 bg-white border border-deep/20 rounded-lg p-2 shadow-lg mt-1" style="width:max-content;max-width:calc(100vw - 2.5rem);" data-reading-id="${r.id}">
-              <div class="grid gap-0.5" style="grid-template-columns:repeat(${Math.ceil(REACTION_EMOJIS.length/2)},minmax(0,1fr));">${REACTION_EMOJIS.map(e=>`<button class="reaction-option px-2 py-1.5 hover:bg-deep/10 rounded text-base" data-emoji="${e}" data-reading-id="${r.id}">${e}</button>`).join('')}</div>
+              <div class="relative">
+                <button class="reaction-toggle-btn px-3 py-1 bg-deep/10 hover:bg-deep/20 rounded-full text-xs" data-reading-id="${r.id}">+ 반응</button>
+                <div class="reaction-popup hidden absolute right-0 top-full mt-1 z-10 bg-white border border-deep/20 rounded-lg p-2 shadow-lg" style="width:max-content;max-width:calc(100vw - 2.5rem);" data-reading-id="${r.id}">
+                  <div class="grid gap-0.5" style="grid-template-columns:repeat(${Math.ceil(REACTION_EMOJIS.length/2)},minmax(0,1fr));">${REACTION_EMOJIS.map(e=>`<button class="reaction-option px-2 py-1.5 hover:bg-deep/10 rounded text-base" data-emoji="${e}" data-reading-id="${r.id}">${e}</button>`).join('')}</div>
+                </div>
+              </div>
             </div>
           </div>`;
         }).join('');
       }
       function handleReactionToggle(readingId, emoji) {
         const r = dailyReadingsCache.find(x=>x.id===readingId);
-        if (r?.reactions) {
+        if (r) {
           const has = r.reading_reactions?.find(x=>x.member_id===currentMemberId&&x.emoji===emoji);
-          if (has) { r.reactions[emoji]=Math.max(0,(r.reactions[emoji]||0)-1); r.reading_reactions=r.reading_reactions?.filter(x=>!(x.member_id===currentMemberId&&x.emoji===emoji))||[]; }
-          else { r.reactions[emoji]=(r.reactions[emoji]||0)+1; (r.reading_reactions=r.reading_reactions||[]).push({member_id:currentMemberId,emoji}); }
+          if (has) {
+            // Remove reaction
+            r.reactions[emoji]=Math.max(0,(r.reactions[emoji]||0)-1);
+            r.reading_reactions=r.reading_reactions?.filter(x=>!(x.member_id===currentMemberId&&x.emoji===emoji))||[];
+          } else {
+            // Add reaction
+            r.reactions[emoji]=(r.reactions[emoji]||0)+1;
+            (r.reading_reactions=r.reading_reactions||[]).push({member_id:currentMemberId,emoji});
+          }
           renderDailyReadingComments();
         }
         toggleReaction(readingId,emoji).then(ok => {
@@ -1064,6 +1073,60 @@
           const roBtn=t.closest('.reaction-option');if(roBtn){handleReactionToggle(roBtn.dataset.readingId,roBtn.dataset.emoji);document.querySelector(`.reaction-popup[data-reading-id="${roBtn.dataset.readingId}"]`)?.classList.add('hidden');return;}
           const editBtn2=t.closest('.edit-btn');if(editBtn2){const nc=prompt('내용을 수정하세요:',editBtn2.dataset.content);if(nc!==null){const r=dailyReadingsCache.find(x=>x.id===editBtn2.dataset.readingId);if(r){r.content=nc.trim();renderDailyReadingComments();}editDailyReading(editBtn2.dataset.readingId,nc).then(ok=>{if(ok)setTimeout(()=>loadDailyReadings().then(()=>renderDailyReadingComments()),500);else loadDailyReadings().then(()=>renderDailyReadingComments());});}return;}
           const delBtn2=t.closest('.delete-btn');if(delBtn2){if(confirm('정말로 삭제하시겠습니까?')){const idx=dailyReadingsCache.findIndex(x=>x.id===delBtn2.dataset.readingId);if(idx>-1){dailyReadingsCache.splice(idx,1);renderDailyReadingComments();}deleteDailyReading(delBtn2.dataset.readingId).then(ok=>{if(!ok)loadDailyReadings().then(()=>renderDailyReadingComments());});}return;}
+        });
+
+        // Long press handler for reaction chips
+        let longPressTimer = null;
+        let longPressTarget = null;
+        const LONG_PRESS_DURATION = 500;
+
+        document.addEventListener('touchstart', (e) => {
+          const chip = e.target.closest('.reaction-chip');
+          if (chip) {
+            longPressTarget = chip;
+            longPressTimer = setTimeout(() => {
+              const attribution = chip.dataset.attribution;
+              if (attribution) alert(attribution);
+              longPressTarget = null;
+            }, LONG_PRESS_DURATION);
+          }
+        }, { passive: true });
+
+        document.addEventListener('touchend', () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+          longPressTarget = null;
+        });
+
+        document.addEventListener('touchmove', () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+          longPressTarget = null;
+        });
+
+        // Desktop long press with mouse
+        document.addEventListener('mousedown', (e) => {
+          const chip = e.target.closest('.reaction-chip');
+          if (chip) {
+            longPressTarget = chip;
+            longPressTimer = setTimeout(() => {
+              const attribution = chip.dataset.attribution;
+              if (attribution) alert(attribution);
+              longPressTarget = null;
+            }, LONG_PRESS_DURATION);
+          }
+        });
+
+        document.addEventListener('mouseup', () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+          longPressTarget = null;
         });
 
         document.addEventListener("change",(e)=>{
