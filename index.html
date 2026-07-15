@@ -69,6 +69,10 @@
       .cal-legend-chip { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: rgba(26, 26, 46, 0.65); cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 999px; background: rgba(0,0,0,0.03); }
       .cal-legend-chip:hover { background: rgba(108, 92, 231, 0.1); }
       .cal-legend-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+      .cal-thumbnails { position: absolute; bottom: 2px; right: 2px; display: flex; gap: 2px; }
+      .cal-thumbnail { width: 16px; height: 16px; border-radius: 3px; object-fit: cover; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.2s; }
+      .cal-thumbnail:hover { transform: scale(1.2); z-index: 10; }
+      .cal-thumbnail-more { font-size: 8px; background: rgba(108, 92, 231, 0.8); color: white; border-radius: 3px; padding: 1px 3px; line-height: 1; }
       .reading-tab-container { padding: 24px; }
       .book-info-section { margin-bottom: 40px; }
       .schedule-section { margin-bottom: 32px; }
@@ -283,6 +287,27 @@
 
       // ── 챕터별 목표 일정: 구간 계산 & 달력 렌더 ──
       const SCHEDULE_PALETTE = ['color-soft-blue','color-pale-green','color-light-peach','color-lavender','color-soft-coral','color-mint-green','color-sky-blue','color-warm-yellow','color-blush-pink','color-periwinkle'];
+      
+      // 완료된 책 목록 추출
+      function getCompletedBooks() {
+        return cache.books.filter(book => {
+          const prog = chapterProgress(book);
+          return prog.done === prog.total && book.finalAt;
+        });
+      }
+      
+      // 책의 읽기 기간 계산
+      function getBookReadingPeriod(book) {
+        const groups = computeScheduleGroups(book);
+        const validGroups = groups.filter(g => !g.unset);
+        if (validGroups.length === 0) return null;
+        
+        const firstStart = validGroups[0].start;
+        const lastEnd = validGroups[validGroups.length - 1].end;
+        
+        return { start: firstStart, end: lastEnd };
+      }
+      
       function computeScheduleGroups(book) {
         const raw = book.schedules || {};
         const groups = [];
@@ -306,6 +331,14 @@
         const validGroups = groups.filter(g=>!g.unset);
         const unsetChapters = groups.filter(g=>g.unset).flatMap(g=>g.chapters);
         const todayStr = dayjs().format('YYYY-MM-DD');
+        
+        // 완료된 책 목록 및 읽기 기간
+        const completedBooks = getCompletedBooks();
+        const completedBookPeriods = completedBooks.map(b => ({
+          book: b,
+          period: getBookReadingPeriod(b)
+        })).filter(x => x.period);
+        
         if (!scheduleCalMonth[book.id]) {
           const active = validGroups.find(g=>todayStr>=g.start&&todayStr<=g.end) || validGroups.find(g=>g.end>=todayStr) || validGroups[validGroups.length-1];
           scheduleCalMonth[book.id] = active ? dayjs(active.end).format('YYYY-MM') : dayjs().format('YYYY-MM');
@@ -319,7 +352,31 @@
           const dateStr = monthStart.date(d).format('YYYY-MM-DD');
           const g = validGroups.find(x=>dateStr>=x.start&&dateStr<=x.end);
           const isToday = dateStr===todayStr, isEnd = g&&dateStr===g.end;
-          cells += `<div class="cal-cell ${g?g.color+' has-range':''} ${isEnd?'is-end':''} ${isToday?'is-today':''}">${d}${isToday?'<span class="cal-today-tag">오늘</span>':''}</div>`;
+          
+          // 해당 날짜에 완료된 책이 있는지 확인
+          const completedOnDate = completedBookPeriods.filter(x => 
+            dateStr >= x.period.start && dateStr <= x.period.end
+          );
+          
+          let thumbnailHtml = '';
+          if (completedOnDate.length > 0) {
+            const displayBooks = completedOnDate.slice(0, 2);
+            const remainingCount = completedOnDate.length - 2;
+            
+            thumbnailHtml = '<div class="cal-thumbnails">';
+            displayBooks.forEach(item => {
+              const coverUrl = item.book.coverUrl || '';
+              if (coverUrl) {
+                thumbnailHtml += `<img src="${escapeHtml(coverUrl)}" alt="${escapeHtml(item.book.title)}" class="cal-thumbnail" data-open-book="${item.book.id}" title="${escapeHtml(item.book.title)}"/>`;
+              }
+            });
+            if (remainingCount > 0) {
+              thumbnailHtml += `<span class="cal-thumbnail-more">+${remainingCount}</span>`;
+            }
+            thumbnailHtml += '</div>';
+          }
+          
+          cells += `<div class="cal-cell ${g?g.color+' has-range':''} ${isEnd?'is-end':''} ${isToday?'is-today':''}">${d}${isToday?'<span class="cal-today-tag">오늘</span>':''}${thumbnailHtml}</div>`;
         }
         const legend = validGroups.map(g => {
           const label = g.chapters.length>1 ? `Ch${g.chapters[0]}-${g.chapters[g.chapters.length-1]}` : `Ch${g.chapters[0]}`;
