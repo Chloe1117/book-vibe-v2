@@ -63,12 +63,15 @@
       .cal-cell.is-end { outline: 2px solid rgba(26, 26, 46, 0.5); outline-offset: -2px; }
       .cal-cell.is-today { box-shadow: 0 0 0 2px #1a1a2e inset; }
       .cal-cell .cal-today-tag { position: absolute; bottom: 1px; font-size: 0.55rem; line-height: 1; }
+      .cal-cell .cal-done-mark { position: absolute; top: 1px; left: 3px; font-size: 0.6rem; line-height: 1; font-weight: 700; color: #00b894; }
+      .cal-cell.has-range .cal-done-mark { color: #ffffff; text-shadow: 0 0 2px rgba(0,0,0,0.4); }
       .cal-nav-btn { cursor: pointer; padding: 0.2rem 0.6rem; border-radius: 0.5rem; font-size: 0.9rem; color: #6c5ce7; }
       .cal-nav-btn:hover { background: rgba(108, 92, 231, 0.1); }
       .cal-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
       .cal-legend-chip { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: rgba(26, 26, 46, 0.65); cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 999px; background: rgba(0,0,0,0.03); }
       .cal-legend-chip:hover { background: rgba(108, 92, 231, 0.1); }
       .cal-legend-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+      .cal-legend-done { color: #00b894; font-weight: 600; }
       .cal-thumbnails { position: absolute; top: 2px; right: 2px; display: flex; gap: 3px; z-index: 5; }
       .cal-thumbnail { width: 24px; height: 36px; border-radius: 4px; object-fit: cover; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: transform 0.2s; aspect-ratio: 2/3; }
       .cal-thumbnail:hover { transform: scale(1.3); z-index: 10; }
@@ -262,6 +265,20 @@
       // 기존 문장은 지우지 않고 그대로 보존·표시한다.
       function isDropout(book, memberId) { return (book?.dropouts||[]).includes(memberId); }
       function activeMembers(book) { return memberList().filter(m => !isDropout(book, m.id)); }
+      // 실제 완료일(_meta.completedAt): 활성 회원이 모두 문장을 채운 날을 챕터별로 남긴다.
+      // 목표 일정(schedules)은 계획이므로 덮어쓰지 않고 둘 다 보존한다.
+      // 한 번 찍힌 완료일은 이후 수정·삭제가 있어도 유지한다 — "처음 다 찬 날"이 사실이기 때문.
+      // 문장에 타임스탬프가 없어 과거 챕터는 소급 기록이 불가능하다(날짜 미기록으로 표시).
+      function isChapterComplete(book, c) {
+        const active = activeMembers(book);
+        return active.length > 0 && active.every(m => (book.chapters[c]?.[m.id]||"").trim());
+      }
+      function stampChapterCompletion(book, c) {
+        if (!book.completedAt) book.completedAt = {};
+        if (!isChapterComplete(book, c) || book.completedAt[c]) return false;
+        book.completedAt[c] = dayjs().format('YYYY-MM-DD');
+        return true;
+      }
       function alignChaptersToTotal(chapters, total) {
         const n = { ...(chapters||{}) };
         for (let c=1; c<=total; c++) if (!n[c]) n[c] = emptyChapterRecord();
@@ -280,7 +297,11 @@
           chapters[c] = rec;
         }
         const dropouts = Array.isArray(meta.dropouts) ? meta.dropouts.filter(x => typeof x==="string") : [];
-        return { chapters, total, dropouts, guideIdInMeta: typeof meta.guideId==="string" ? meta.guideId : "" };
+        const completedAt = {};
+        if (meta.completedAt && typeof meta.completedAt === "object") {
+          for (let c=1; c<=total; c++) { const d = meta.completedAt[c] ?? meta.completedAt[String(c)]; if (typeof d==="string" && d) completedAt[c] = d; }
+        }
+        return { chapters, total, dropouts, completedAt, guideIdInMeta: typeof meta.guideId==="string" ? meta.guideId : "" };
       }
       function normalizeBook(row, idx) {
         const norm = normalizeMilestones(row.milestones);
@@ -291,7 +312,7 @@
           id: row.id || `b${idx+1}`, title: row.title || `2026 독서 ${idx+1}`,
           author: row.author||"", coverUrl: row.cover_url||"", guideId, guide_id: guideId,
           chapters: alignChaptersToTotal(norm.chapters, totalChapters), totalChapters,
-          dropouts: norm.dropouts,
+          dropouts: norm.dropouts, completedAt: norm.completedAt,
           final_sentence_text: row.final_sentence_text||"",
           final_sentence_member_id: row.final_sentence_member_id||"",
           final_sentence_chapter: row.final_sentence_chapter||null,
@@ -301,7 +322,7 @@
         };
       }
       function serializeMilestones(book) {
-        const p = { _meta: { totalChapters: book.totalChapters, guideId: book.guideId, dropouts: book.dropouts||[] } };
+        const p = { _meta: { totalChapters: book.totalChapters, guideId: book.guideId, dropouts: book.dropouts||[], completedAt: book.completedAt||{} } };
         for (let c=1; c<=book.totalChapters; c++) p[c] = book.chapters[c] || emptyChapterRecord();
         return p;
       }
@@ -420,11 +441,21 @@
             thumbnailHtml += '</div>';
           }
           
-          cells += `<div class="cal-cell ${g?g.color+' has-range':''} ${isEnd?'is-end':''} ${isToday?'is-today':''}">${d}${isToday?'<span class="cal-today-tag">오늘</span>':''}${thumbnailHtml}</div>`;
+          const doneChs = Object.keys(book.completedAt||{}).filter(c => book.completedAt[c] === dateStr);
+          const doneMark = doneChs.length ? `<span class="cal-done-mark" title="Chapter ${doneChs.join(', ')} 실제 완료">✓</span>` : '';
+
+          cells += `<div class="cal-cell ${g?g.color+' has-range':''} ${isEnd?'is-end':''} ${isToday?'is-today':''}">${d}${isToday?'<span class="cal-today-tag">오늘</span>':''}${doneMark}${thumbnailHtml}</div>`;
         }
         const legend = validGroups.map(g => {
           const label = g.chapters.length>1 ? `Ch${g.chapters[0]}-${g.chapters[g.chapters.length-1]}` : `Ch${g.chapters[0]}`;
-          return `<span class="cal-legend-chip" data-jump-month="${dayjs(g.end).format('YYYY-MM')}" data-book="${book.id}"><span class="cal-legend-dot ${g.color}"></span>${label} · ${dayjs(g.end).format('M/D')}</span>`;
+          // 목표일은 그대로 두고 실제 완료일을 옆에 병기한다 (덮어쓰지 않는다)
+          const doneAt = (book.completedAt||{})[g.chapters[g.chapters.length-1]];
+          let doneTxt = '';
+          if (doneAt) {
+            const gap = dayjs(doneAt).diff(dayjs(g.end),'day');
+            doneTxt = ` <span class="cal-legend-done">→ ${dayjs(doneAt).format('M/D')} (${gap>0?`+${gap}일`:gap<0?`${gap}일`:'정시'})</span>`;
+          }
+          return `<span class="cal-legend-chip" data-jump-month="${dayjs(g.end).format('YYYY-MM')}" data-book="${book.id}"><span class="cal-legend-dot ${g.color}"></span>${label} · ${dayjs(g.end).format('M/D')}${doneTxt}</span>`;
         }).join('');
         const unsetLine = unsetChapters.length ? `<p class="mt-2 text-xs text-deep/40">일정 미정: ${unsetChapters.map(c=>`Chapter ${c}`).join(', ')}</p>` : '';
         return `<div class="schedule-calendar">
@@ -444,7 +475,7 @@
       function ensureBook(id) {
         const hit = bookById(id); if (hit) return hit;
         const g = memberList()[0]?.id||""; const tc=4;
-        return { id, title:id, author:"", coverUrl:"", guideId:g, dropouts:[],
+        return { id, title:id, author:"", coverUrl:"", guideId:g, dropouts:[], completedAt:{},
           chapters:alignChaptersToTotal({},tc), totalChapters:tc,
           final_sentence_text:"", final_sentence_member_id:"", final_sentence_chapter:null, finalAt:null };
       }
@@ -777,7 +808,11 @@
           const blind=isChapterBlind(sel,c);
           const active=activeMembers(sel);
           const sub=active.filter(m=>(sel.chapters[c]?.[m.id]||"").trim()).length;
-          return `<section class="mt-4 rounded-2xl border border-white/10 bg-white/80 p-4 shadow-sm hover:shadow-md transition-shadow"><div class="mb-3 flex items-center justify-between"><h4 class="font-bold text-deep text-lg">Chapter ${c}</h4><span class="text-xs font-medium text-gold bg-gold/10 px-2 py-1 rounded-full">${sub}/${active.length} 작성</span></div><ul class="space-y-3">${memberList().map(m=>{
+          const doneAt=sel.completedAt?.[c];
+          const doneBadge=doneAt
+            ?`<span class="text-xs font-medium text-sage bg-sage/10 px-2 py-1 rounded-full whitespace-nowrap">✓ ${dayjs(doneAt).format('M/D')} 완료</span>`
+            :(isChapterComplete(sel,c)?`<span class="text-xs font-medium text-deep/35 bg-deep/5 px-2 py-1 rounded-full whitespace-nowrap">완료 · 날짜 미기록</span>`:"");
+          return `<section class="mt-4 rounded-2xl border border-white/10 bg-white/80 p-4 shadow-sm hover:shadow-md transition-shadow"><div class="mb-3 flex items-center justify-between gap-2"><h4 class="font-bold text-deep text-lg">Chapter ${c}</h4><div class="flex items-center gap-1.5">${doneBadge}<span class="text-xs font-medium text-gold bg-gold/10 px-2 py-1 rounded-full whitespace-nowrap">${sub}/${active.length} 작성</span></div></div><ul class="space-y-3">${memberList().map(m=>{
             const sentence=(sel.chapters[c]?.[m.id]||"").trim(), isOwn=m.id===currentMemberId, dropped=isDropout(sel,m.id);
             let disp;
             if (!sentence) disp=`<span class="text-deep/35">${dropped?"완독 제외":"아직 기록 없음"}</span>`;
@@ -1202,6 +1237,8 @@
               book.guideId=form.elements.namedItem("guideId").value;
               const joined=Array.from(form.querySelectorAll('input[name="participant"]:checked')).map(el=>el.value);
               book.dropouts=memberList().filter(m=>!joined.includes(m.id)).map(m=>m.id);
+              // 하차 처리로 남은 회원 기준 완료가 성립할 수 있으므로 전 챕터를 다시 판정한다
+              for(let c=1;c<=book.totalChapters;c++) stampChapterCompletion(book,c);
               const next=Math.min(10,Math.max(1,parseInt(form.elements.namedItem("totalChapters").value,10)||1));
               book.totalChapters=next;book.chapters=alignChaptersToTotal(book.chapters,next);
               const cu=(form.elements.namedItem("coverUrl").value||"").trim();if(cu)book.coverUrl=cu;
@@ -1214,7 +1251,10 @@
               const b=cache.books.find(x=>x.id===currentBookId);if(!b||!chapter||!sentence)return;
               if(!b.chapters[chapter])b.chapters[chapter]=emptyChapterRecord();
               b.chapters[chapter][currentMemberId]=sentence;
-              form.reset();await persistBook(b);await refreshFromDb();return renderApp();
+              const justDone=stampChapterCompletion(b,chapter);
+              form.reset();await persistBook(b);await refreshFromDb();
+              if(justDone)showToast(`Chapter ${chapter} 완료! 모두의 문장이 공개됐어요.`);
+              return renderApp();
             }
           }catch(err){alert(err.message||String(err));}
         });
