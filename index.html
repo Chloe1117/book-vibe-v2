@@ -136,9 +136,12 @@
          폰에서 카드 안 스크롤이 페이지 스크롤을 가로채 아래로 내려가기 어렵다는 VOC(2026-08-15).
          길이는 미리보기 개수 + '더 보기' 로 제어한다. */
       .daily-reading-scroll { padding-right: 2px; }
-      .daily-more-btn { width: 100%; margin-top: 0.25rem; padding: 0.6rem 0; border: none; background: transparent; cursor: pointer;
+      .daily-more-btn, .daily-fold-btn { width: 100%; padding: 0.6rem 0; border: none; background: transparent; cursor: pointer;
         font-size: 0.78rem; font-weight: 600; color: #6c5ce7; border-radius: 0.6rem; transition: background 0.2s ease; }
-      .daily-more-btn:hover { background: rgba(108, 92, 231, 0.07); }
+      .daily-more-btn { margin-top: 0.25rem; }
+      .daily-more-btn:hover, .daily-fold-btn:hover { background: rgba(108, 92, 231, 0.07); }
+      /* 펼친 상태에서는 목록 위에도 접기를 둔다 — 끝까지 내려가야 접히는 불편(2026-08-15 VOC) */
+      .daily-fold-top { margin-bottom: 0.25rem; background: rgba(108, 92, 231, 0.05); }
       /* Reaction Popup Layout */
       .reaction-popup { flex-wrap: wrap; max-width: 280px; gap: 4px; }
       .reaction-popup .flex { flex-wrap: wrap; }
@@ -539,8 +542,9 @@
 
       // ── Daily Readings ──
       let dailyReadingsCache = [];
-      let dailyShowAll = false;              // '더 보기' 펼침 상태
       const DAILY_PREVIEW_COUNT = 3;         // 기본으로 보여줄 최근 기록 수
+      const DAILY_STEP = 5;                  // '더 보기' 한 번에 추가할 개수 (한꺼번에 다 펼치지 않는다)
+      let dailyVisible = DAILY_PREVIEW_COUNT;
       const REACTION_EMOJIS = ['❤️','👍','🔥','👏','😄','😢','😡','🤔','🤣','🎉'];
       async function loadDailyReadings() {
         try {
@@ -599,11 +603,15 @@
         const el = document.getElementById('daily-reading-comments'); if (!el) return;
         if (!dailyReadingsCache.length) { el.innerHTML=`<div class="text-center py-4 text-deep/45 text-sm">아직 독서 기록이 없습니다.</div>`; return; }
         const total = dailyReadingsCache.length;
-        const list = dailyShowAll ? dailyReadingsCache : dailyReadingsCache.slice(0, DAILY_PREVIEW_COUNT);
-        const moreBtn = total > DAILY_PREVIEW_COUNT
-          ? `<button type="button" class="daily-more-btn">${dailyShowAll ? "접기 ▲" : `+ 이전 기록 ${total-DAILY_PREVIEW_COUNT}개 더 보기`}</button>`
-          : "";
-        el.innerHTML = list.map(r => {
+        const shown = Math.min(dailyVisible, total);
+        const list = dailyReadingsCache.slice(0, shown);
+        const expanded = shown > DAILY_PREVIEW_COUNT;
+        const foldBtn = `<button type="button" class="daily-fold-btn">접기 ▲</button>`;
+        const topBtn = expanded ? `<button type="button" class="daily-fold-btn daily-fold-top">접기 ▲</button>` : "";
+        const moreBtn = shown < total
+          ? `<button type="button" class="daily-more-btn">+ 이전 기록 더 보기 (${shown}/${total})</button>`
+          : (expanded ? foldBtn : "");
+        el.innerHTML = topBtn + list.map(r => {
           const name=r.club_members?.display_name||'알 수 없음', isOwner=r.member_id===currentMemberId;
           const reactions=r.reactions||{};
           // Show all existing reactions, not just new ones
@@ -1146,8 +1154,10 @@
 
           // Daily reading 상호작용
           if(!document.getElementById('daily-reading-comments')?.contains(t)){document.querySelectorAll('.reaction-popup').forEach(p=>p.classList.add('hidden'));return;}
+          const foldBtn2=t.closest('.daily-fold-btn');
+          if(foldBtn2){dailyVisible=DAILY_PREVIEW_COUNT;renderDailyReadingComments();document.getElementById('daily-reading-input')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
           const moreBtn2=t.closest('.daily-more-btn');
-          if(moreBtn2){dailyShowAll=!dailyShowAll;renderDailyReadingComments();return;}
+          if(moreBtn2){dailyVisible=Math.min(dailyReadingsCache.length,dailyVisible+DAILY_STEP);renderDailyReadingComments();return;}
           const rtBtn=t.closest('.reaction-toggle-btn');if(rtBtn){const p=document.querySelector(`.reaction-popup[data-reading-id="${rtBtn.dataset.readingId}"]`);if(p){p.classList.toggle('hidden');document.querySelectorAll('.reaction-popup').forEach(x=>x!==p&&x.classList.add('hidden'));}return;}
           const roBtn=t.closest('.reaction-option');if(roBtn){handleReactionToggle(roBtn.dataset.readingId,roBtn.dataset.emoji);document.querySelector(`.reaction-popup[data-reading-id="${roBtn.dataset.readingId}"]`)?.classList.add('hidden');return;}
           const editBtn2=t.closest('.edit-btn');if(editBtn2){const nc=prompt('내용을 수정하세요:',editBtn2.dataset.content);if(nc!==null){const r=dailyReadingsCache.find(x=>x.id===editBtn2.dataset.readingId);if(r){r.content=nc.trim();renderDailyReadingComments();}editDailyReading(editBtn2.dataset.readingId,nc).then(ok=>{if(ok)setTimeout(()=>loadDailyReadings().then(()=>renderDailyReadingComments()),500);else{showToast('수정하지 못했습니다. 잠시 후 다시 시도해주세요.');loadDailyReadings().then(()=>renderApp());}});}return;}
