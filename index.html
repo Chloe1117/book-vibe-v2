@@ -759,7 +759,10 @@
               }
               return `<li class="rounded-md border border-deep/10 px-2 py-2"><span class="text-[11px] font-semibold text-deep/55">${escapeHtml(m.display_name)}</span>${dropped?`<span class="ml-1.5 rounded-full bg-deep/10 px-1.5 py-0.5 text-[10px] font-medium text-deep/50">완독 제외</span>`:""}<div class="mt-1">${displayContent}</div></li>`;
             }).join("");
-            return `<section class="mt-3 rounded-lg border border-deep/10 bg-white/70 p-3"><h4 class="font-semibold text-sm text-deep">Chapter ${c}</h4><ul class="mt-2 space-y-2">${memberItems}</ul></section>`;
+            const dAt = book.completedAt?.[c];
+            const dTxt = dAt ? `<span class="ml-2 text-[11px] font-medium text-sage">✓ ${dayjs(dAt).format('M/D')} 완료</span>`
+                             : (isChapterComplete(book,c) ? `<span class="ml-2 text-[11px] text-deep/35">완료 · 날짜 미기록</span>` : "");
+            return `<section class="mt-3 rounded-lg border border-deep/10 bg-white/70 p-3"><h4 class="font-semibold text-sm text-deep">Chapter ${c}${dTxt}</h4><ul class="mt-2 space-y-2">${memberItems}</ul></section>`;
           }).join("");
           content.innerHTML=`<div class="paper-panel max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-deep/12 p-5 shadow-2xl"><div class="mb-3 flex items-start justify-between gap-3"><div><h3 class="font-serif text-xl text-deep">${escapeHtml(book.title)}</h3><p class="text-sm text-deep/55">${escapeHtml(book.author||"저자 미입력")}</p><p class="mt-1"><span class="guide-badge">🚩 이번 책의 길잡이: ${escapeHtml(memberNameById(book.guideId))}</span></p></div><button class="btn-ghost !py-1.5 !text-xs" data-close-modal="1">닫기</button></div><p class="text-xs text-deep/60">${canSelect?"최종 선택은 모두가 입력한 챕터에서만 가능합니다.":"길잡이만 최종 문장을 선택할 수 있습니다."}</p>${rows}</div>`;
 
