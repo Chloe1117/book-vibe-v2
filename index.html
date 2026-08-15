@@ -189,6 +189,7 @@
       let isAdminAuthed = false; // Supabase Auth 로그인(관리자) 여부 — 모임 이벤트 삭제 권한
       let toastMessage = "";
       let toastTimer = null;
+      let longPressAt = 0;   // 롱프레스(누가 눌렀는지) 발동 시각 — 뒤따라오는 click 이 토글되지 않게 막는다
       let rtChannel = null;
       let debounceTimer = null;
       let scheduleCalMonth = {};
@@ -1184,6 +1185,14 @@
           if(moreBtn2){dailyVisible=Math.min(dailyReadingsCache.length,dailyVisible+DAILY_STEP);renderDailyReadingComments();return;}
           const rtBtn=t.closest('.reaction-toggle-btn');if(rtBtn){const p=document.querySelector(`.reaction-popup[data-reading-id="${rtBtn.dataset.readingId}"]`);if(p){p.classList.toggle('hidden');document.querySelectorAll('.reaction-popup').forEach(x=>x!==p&&x.classList.add('hidden'));}return;}
           const roBtn=t.closest('.reaction-option');if(roBtn){handleReactionToggle(roBtn.dataset.readingId,roBtn.dataset.emoji);document.querySelector(`.reaction-popup[data-reading-id="${roBtn.dataset.readingId}"]`)?.classList.add('hidden');return;}
+          // 달린 칩을 눌러도 토글되게 한다. cursor-pointer 라 누르면 될 것처럼 보이는데
+          // 그동안 클릭 핸들러가 없어 "취소가 안 된다"로 보였다(2026-08-15).
+          const chipEl=t.closest('.reaction-chip');
+          if(chipEl){
+            if(Date.now()-longPressAt < 700) return;   // 롱프레스로 알림을 띄운 직후의 click 은 무시
+            handleReactionToggle(chipEl.dataset.readingId,chipEl.dataset.emoji);
+            return;
+          }
           const editBtn2=t.closest('.edit-btn');if(editBtn2){const nc=prompt('내용을 수정하세요:',editBtn2.dataset.content);if(nc!==null){const r=dailyReadingsCache.find(x=>x.id===editBtn2.dataset.readingId);if(r){r.content=nc.trim();renderDailyReadingComments();}editDailyReading(editBtn2.dataset.readingId,nc).then(ok=>{if(ok)setTimeout(()=>loadDailyReadings().then(()=>renderDailyReadingComments()),500);else{showToast('수정하지 못했습니다. 잠시 후 다시 시도해주세요.');loadDailyReadings().then(()=>renderApp());}});}return;}
           const delBtn2=t.closest('.delete-btn');if(delBtn2){if(confirm('정말로 삭제하시겠습니까?')){const idx=dailyReadingsCache.findIndex(x=>x.id===delBtn2.dataset.readingId);if(idx>-1){dailyReadingsCache.splice(idx,1);renderDailyReadingComments();}deleteDailyReading(delBtn2.dataset.readingId).then(ok=>{if(!ok){showToast('삭제하지 못했습니다. 잠시 후 다시 시도해주세요.');loadDailyReadings().then(()=>renderApp());}});}return;}
         });
@@ -1199,6 +1208,7 @@
             longPressTarget = chip;
             longPressTimer = setTimeout(() => {
               const attribution = chip.dataset.attribution;
+              longPressAt = Date.now();
               if (attribution) alert(attribution);
               longPressTarget = null;
             }, LONG_PRESS_DURATION);
@@ -1228,6 +1238,7 @@
             longPressTarget = chip;
             longPressTimer = setTimeout(() => {
               const attribution = chip.dataset.attribution;
+              longPressAt = Date.now();
               if (attribution) alert(attribution);
               longPressTarget = null;
             }, LONG_PRESS_DURATION);
