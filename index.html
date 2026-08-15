@@ -584,11 +584,19 @@
       async function toggleReaction(readingId, emoji) {
         if (!currentMemberId) return false;
         try {
+          // .single() 은 0행일 때뿐 아니라 2행 이상일 때도 PGRST116 을 낸다.
+          // 그걸 "행 없음"으로만 해석하면 중복이 쌓인 리액션은 취소 대신 insert 가 되어 영원히 안 지워진다.
+          // → single() 을 쓰지 않고 전부 조회해, 있으면 중복까지 한 번에 지운다(자가 치유).
           const { data:ex, error:fe } = await sb.from('reading_reactions').select('id')
-            .eq('reading_id',readingId).eq('member_id',currentMemberId).eq('emoji',emoji).single();
-          if (fe&&fe.code!=='PGRST116') throw fe;
-          if (ex) await sb.from('reading_reactions').delete().eq('id',ex.id);
-          else await sb.from('reading_reactions').insert({reading_id:readingId,member_id:currentMemberId,emoji});
+            .eq('reading_id',readingId).eq('member_id',currentMemberId).eq('emoji',emoji);
+          if (fe) throw fe;
+          if (ex && ex.length) {
+            const { error:de } = await sb.from('reading_reactions').delete().in('id', ex.map(x=>x.id));
+            if (de) throw de;
+          } else {
+            const { error:ie } = await sb.from('reading_reactions').insert({reading_id:readingId,member_id:currentMemberId,emoji});
+            if (ie) throw ie;
+          }
           const { data:counts } = await sb.from('reading_reactions').select('emoji').eq('reading_id',readingId);
           // Get existing reactions to preserve history
           const { data:reading } = await sb.from('daily_readings').select('reactions').eq('id',readingId).single();
