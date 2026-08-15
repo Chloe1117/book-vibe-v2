@@ -143,9 +143,13 @@
       /* 펼친 상태에서는 목록 위에도 접기를 둔다 — 끝까지 내려가야 접히는 불편(2026-08-15 VOC) */
       .daily-fold-top { margin-bottom: 0.25rem; background: rgba(108, 92, 231, 0.05); }
       /* Reaction Popup Layout */
-      .reaction-popup { flex-wrap: wrap; max-width: 280px; gap: 4px; }
-      .reaction-popup .flex { flex-wrap: wrap; }
-      .reaction-option { flex: 0 0 calc(33.33% - 4px); }
+      /* Reaction Popup — 이모지 + 라벨 2열. 라벨이 없으면 🔖 이 무슨 뜻인지 알 수 없고,
+         주 사용 환경이 폰이라 툴팁(title)은 보이지 않는다. */
+      .reaction-option { display: flex; align-items: center; gap: 0.4rem; width: 100%; padding: 0.45rem 0.5rem;
+        border: none; background: transparent; cursor: pointer; border-radius: 0.5rem;
+        font-size: 0.75rem; color: rgba(26, 26, 46, 0.8); white-space: nowrap; text-align: left; }
+      .reaction-option:hover { background: rgba(108, 92, 231, 0.1); }
+      .reaction-option .ro-emoji { font-size: 1.05rem; line-height: 1; }
     </style>
   </head>
   <body class="app-bg min-h-screen antialiased">
@@ -545,7 +549,19 @@
       const DAILY_PREVIEW_COUNT = 3;         // 기본으로 보여줄 최근 기록 수
       const DAILY_STEP = 5;                  // '더 보기' 한 번에 추가할 개수 (한꺼번에 다 펼치지 않는다)
       let dailyVisible = DAILY_PREVIEW_COUNT;
-      const REACTION_EMOJIS = ['❤️','👍','🔥','👏','😄','😢','😡','🤔','🤣','🎉'];
+      // 독서클럽 전용 리액션. 범용 SNS 세트(👍👏🎉)는 의미가 겹쳐 실제로 3~4개만 쓰였다.
+      // 이모지는 Emoji 12.0(2019) 이하에서만 고른다 — 🫠 같은 Emoji 14 는 Windows 10 에서 두부 박스로 뜬다.
+      const REACTIONS = [
+        { emoji:'🔖', label:'밑줄 각'    },
+        { emoji:'💡', label:'나도 그생각' },
+        { emoji:'💗', label:'마음 몽글'   },
+        { emoji:'🤯', label:'머리 띵'    },
+        { emoji:'☕', label:'얘기해요'   },
+        { emoji:'🐢', label:'아직 여기'   },
+        { emoji:'🔥', label:'완독 응원'   },
+        { emoji:'🤣', label:'빵 터짐'    },
+      ];
+      const REACTION_EMOJIS = REACTIONS.map(r => r.emoji);
       async function loadDailyReadings() {
         try {
           const { data, error } = await sb.from('daily_readings')
@@ -632,7 +648,7 @@
               <div class="relative">
                 <button class="reaction-toggle-btn px-3 py-1 bg-deep/10 hover:bg-deep/20 rounded-full text-xs" data-reading-id="${r.id}">+ 반응</button>
                 <div class="reaction-popup hidden absolute right-0 top-full mt-1 z-10 bg-white border border-deep/20 rounded-lg p-2 shadow-lg" style="width:max-content;max-width:calc(100vw - 2.5rem);" data-reading-id="${r.id}">
-                  <div class="grid gap-0.5" style="grid-template-columns:repeat(${Math.ceil(REACTION_EMOJIS.length/2)},minmax(0,1fr));">${REACTION_EMOJIS.map(e=>`<button class="reaction-option px-2 py-1.5 hover:bg-deep/10 rounded text-base" data-emoji="${e}" data-reading-id="${r.id}">${e}</button>`).join('')}</div>
+                  <div class="grid gap-0.5" style="grid-template-columns:repeat(2,minmax(0,1fr));">${REACTIONS.map(x=>`<button type="button" class="reaction-option" data-emoji="${x.emoji}" data-reading-id="${r.id}"><span class="ro-emoji">${x.emoji}</span>${x.label}</button>`).join('')}</div>
                 </div>
               </div>
             </div>
